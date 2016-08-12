@@ -33,8 +33,8 @@ class DatasetHelper$Test extends FunSuite {
   }
 
   test("check 1st row 3rd element") {
-    assert(df.select("2ndH").take(1)(0).getMap[String,Double](0).get("re").get === 0.0097901532426476479)
-    assert(df.select("2ndH").take(1)(0).getMap[String,Double](0).get("im").get === +0.37801700830459595)
+    assert(df.select("2H").take(1)(0).getMap[String,Double](0).get("re").get === 0.0097901532426476479)
+    assert(df.select("2H").take(1)(0).getMap[String,Double](0).get("im").get === +0.37801700830459595)
   }
 
   test("check 2nd row 1st element") {
@@ -57,8 +57,8 @@ class DatasetHelper$Test extends FunSuite {
 
   test("check elements with ID") {
     assert(dfID.select("fund").take(1)(0).getMap[String,Double](0).get("re").get === -75.49444580078125)
-    assert(dfID.select("2ndH").take(1)(0).getMap[String,Double](0).get("re").get === 0.0097901532426476479)
-    assert(dfID.select("2ndH").take(1)(0).getMap[String,Double](0).get("im").get === +0.37801700830459595)
+    assert(dfID.select("2H").take(1)(0).getMap[String,Double](0).get("re").get === 0.0097901532426476479)
+    assert(dfID.select("2H").take(1)(0).getMap[String,Double](0).get("im").get === +0.37801700830459595)
     assert(dfID.select("fund").take(2)(1).getMap[String,Double](0).get("re").get === +84.738815307617188)
     assert(dfID.take(2)(1).getAs[Map[String,Double]](1).get("re").get === +84.738815307617188)
     assert(dfID.select("2ndH").take(5)(4).getMap[String,Double](0).get("re").get === 0.36591875553131104)

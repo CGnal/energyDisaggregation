@@ -43,17 +43,17 @@ object Main {
     val dfTS: DataFrame = DatasetHelper.fromArrayIndexedToDF(sc, sqlContext,
       arrayTimestamp, DatasetHelper.VItimeSchema, 0)
 
+    // dataframe with Voltage, Current and TimeTicks relative to a given Phase
     val dfVI: DataFrame = dfV.join(dfI, dfV("ID") === dfI("ID")).drop(dfI("ID")).join(dfTS, dfV("ID") === dfTS("ID")).drop(dfTS("ID"))
 
+    // Adding Power = V * conj(I)
+    dfVI.withColumn("PowerFund", ComplexMap.complexProdUDF(dfVI("Vfund"), ComplexMap.complexConjUDF(dfVI("Ifund"))))
+    dfVI.withColumn("Power1H", ComplexMap.complexProdUDF(dfVI("V1H"), ComplexMap.complexConjUDF(dfVI("I1H"))))
+    dfVI.withColumn("Power2H", ComplexMap.complexProdUDF(dfVI("V2H"), ComplexMap.complexConjUDF(dfVI("I2H"))))
+    dfVI.withColumn("Power3H", ComplexMap.complexProdUDF(dfVI("V3H"), ComplexMap.complexConjUDF(dfVI("I3H"))))
+    dfVI.withColumn("Power4H", ComplexMap.complexProdUDF(dfVI("V4H"), ComplexMap.complexConjUDF(dfVI("I4H"))))
+    dfVI.withColumn("Power5H", ComplexMap.complexProdUDF(dfVI("V5H"), ComplexMap.complexConjUDF(dfVI("I5H"))))
 
-    val complexConj = ((x: Map[String,Double]) => ComplexMap.conj(x))
-    val complexConjUDF = udf(complexConj)
-    dfVI.withColumn("ConjFund", complexConjUDF(dfVI("Vfund")))
-
-
-    val complexProd = ((x: Map[String,Double], y: Map[String,Double]) => ComplexMap.prod(x,y))
-    val complexProdUDF = udf(complexProd)
-    dfVI.withColumn("PowerFund", complexProdUDF(dfVI("Vfund"), dfVI("Ifund")))
 
 
 
@@ -63,11 +63,8 @@ object Main {
 
 /*
     dfV.withColumn("prodotto", dfV("fund")*dfV("2ndH"))
-*/
-//    val frutta = udf((line: Int) => line * 2)
-//    val myDf = dfV.withColumn("prodfrutta", frutta("Id"))
 
- /*   val polcevera = dfV.take(1)(0).getInt(0)
+    val polcevera = dfV.take(1)(0).getInt(0)
 
     val frutta = dfV.take(1)(0)
 */

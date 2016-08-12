@@ -16,7 +16,6 @@ import scala.collection.immutable.IndexedSeq
 
 object DatasetHelper {
 
-
   // questo structype serve per dire a Scala come leggere la roba dal dataframe SQL
   // I paramteri MapType, StringType etc... fanno sì che dopo Scala sappia che la roba dentro il dataframe (che è un oggetto di Spark)
   // è ruspettivamente una mappa, string etc...
@@ -24,30 +23,30 @@ object DatasetHelper {
     StructType(
       StructField("ID", IntegerType, false) ::
         StructField("Vfund", MapType(StringType, DoubleType), false) ::
-        StructField("V1stH", MapType(StringType, DoubleType), false) ::
-        StructField("V2ndH", MapType(StringType, DoubleType), false) ::
-        StructField("V3ndH", MapType(StringType, DoubleType), false) ::
-        StructField("V4ndH", MapType(StringType, DoubleType), false) ::
-        StructField("V5ndH", MapType(StringType, DoubleType), false) :: Nil)
+        StructField("V1H", MapType(StringType, DoubleType), false) ::
+        StructField("V2H", MapType(StringType, DoubleType), false) ::
+        StructField("V3H", MapType(StringType, DoubleType), false) ::
+        StructField("V4H", MapType(StringType, DoubleType), false) ::
+        StructField("V5H", MapType(StringType, DoubleType), false) :: Nil)
 
   val Ischema: StructType =
     StructType(
       StructField("ID", IntegerType, false) ::
         StructField("Ifund", MapType(StringType, DoubleType), false) ::
-        StructField("I1stH", MapType(StringType, DoubleType), false) ::
-        StructField("I2ndH", MapType(StringType, DoubleType), false) ::
-        StructField("I3ndH", MapType(StringType, DoubleType), false) ::
-        StructField("I4ndH", MapType(StringType, DoubleType), false) ::
-        StructField("I5ndH", MapType(StringType, DoubleType), false) :: Nil)
+        StructField("I1H", MapType(StringType, DoubleType), false) ::
+        StructField("I2H", MapType(StringType, DoubleType), false) ::
+        StructField("I3H", MapType(StringType, DoubleType), false) ::
+        StructField("I4H", MapType(StringType, DoubleType), false) ::
+        StructField("I5H", MapType(StringType, DoubleType), false) :: Nil)
 
   val VIschemaNoID: StructType =
     StructType(
       StructField("fund", MapType(StringType, DoubleType), false) ::
-        StructField("1stH", MapType(StringType, DoubleType), false) ::
-        StructField("2ndH", MapType(StringType, DoubleType), false) ::
-        StructField("3ndH", MapType(StringType, DoubleType), false) ::
-        StructField("4ndH", MapType(StringType, DoubleType), false) ::
-        StructField("5ndH", MapType(StringType, DoubleType), false) :: Nil)
+        StructField("1H", MapType(StringType, DoubleType), false) ::
+        StructField("2H", MapType(StringType, DoubleType), false) ::
+        StructField("3H", MapType(StringType, DoubleType), false) ::
+        StructField("4H", MapType(StringType, DoubleType), false) ::
+        StructField("5H", MapType(StringType, DoubleType), false) :: Nil)
 
   val VItimeSchema: StructType =
     StructType(StructField("ID", IntegerType, false) ::
@@ -59,7 +58,15 @@ object DatasetHelper {
       StructField("ON_Time", TimestampType, false) ::
       StructField("OFF_Time", TimestampType, false) :: Nil)
 
-
+  /**
+    * read a csv of complex number and create a dataframe with no ID for the rows
+    * @deprecated
+    * @param sc
+    * @param sqlContext
+    * @param filenameCSV
+    * @param schema
+    * @return
+    */
   def fromCSVwithComplexToDF(sc: SparkContext, sqlContext: SQLContext,
                              filenameCSV: String, schema: StructType): DataFrame = {
 
@@ -87,7 +94,15 @@ object DatasetHelper {
     df
   }
 
-
+  /**
+    * transform an Array of tuple with (content of the row, index of the row) in a dataframe with a column ID
+    * @param sc
+    * @param sqlContext
+    * @param indexedTable
+    * @param schema
+    * @param complexFlag 1 in case of complex numbers 
+    * @return
+    */
   def fromArrayIndexedToDF(sc: SparkContext, sqlContext: SQLContext,
                            indexedTable: Array[(Array[String], Int)], schema: StructType, complexFlag: Int): DataFrame = {
 

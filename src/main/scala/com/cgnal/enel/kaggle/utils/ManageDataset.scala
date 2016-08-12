@@ -7,6 +7,12 @@ import scala.io
   */
 object ManageDataset extends App {
 
+
+  /**
+    * read a CSV file and add an ID index
+    * @param filename
+    * @return Array of Tuple2 where the first element of the tuple is the row of the csv and the second the index of the row
+    */
   def fromCSVtoArrayAddingRowIndex(filename: String):
   Array[(Array[String], Int)] = {
     // each row is an array of strings (the columns in the csv file)
@@ -21,7 +27,6 @@ object ManageDataset extends App {
 
     val indexedTable: Array[(Array[String], Int)] = rows.toArray.zipWithIndex
     indexedTable
-
 
   }
 }
