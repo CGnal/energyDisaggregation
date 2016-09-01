@@ -3,7 +3,7 @@ package com.cgnal.enel.kaggle
 import java.util
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
-import com.cgnal.enel.kaggle.utils.{ComplexMap, ManageDataset}
+import com.cgnal.enel.kaggle.utils.ComplexMap
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
@@ -31,17 +31,17 @@ object Main {
     val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/timestamp.csv"
 
 
-    val arrayV = ManageDataset.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
+    val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
     val dfV: DataFrame = DatasetHelper.fromArrayIndexedToDF(sc, sqlContext,
       arrayV, DatasetHelper.Vschema, 1)
 
-    val arrayI = ManageDataset.fromCSVtoArrayAddingRowIndex(filenameCSV_I)
+    val arrayI = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_I)
     val dfI: DataFrame = DatasetHelper.fromArrayIndexedToDF(sc, sqlContext,
       arrayI, DatasetHelper.Ischema, 1)
 
-    val arrayTimestamp = ManageDataset.fromCSVtoArrayAddingRowIndex(filenameTimestamp)
+    val arrayTimestamp = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTimestamp)
     val dfTS: DataFrame = DatasetHelper.fromArrayIndexedToDF(sc, sqlContext,
-      arrayTimestamp, DatasetHelper.VItimeSchema, 0)
+      arrayTimestamp, DatasetHelper.TSschema, 0)
 
     // dataframe with Voltage, Current and TimeTicks relative to a given Phase
     val dfVI: DataFrame = dfV.join(dfI, dfV("ID") === dfI("ID")).drop(dfI("ID")).join(dfTS, dfV("ID") === dfTS("ID")).drop(dfTS("ID"))

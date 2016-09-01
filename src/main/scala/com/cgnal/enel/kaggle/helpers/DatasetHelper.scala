@@ -7,6 +7,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import org.apache.spark.{SparkContext, SparkConf}
+import scala.collection.mutable.ArrayBuffer
+import scala.io
 
 import scala.collection.immutable.IndexedSeq
 
@@ -48,7 +50,7 @@ object DatasetHelper {
         StructField("4H", MapType(StringType, DoubleType), false) ::
         StructField("5H", MapType(StringType, DoubleType), false) :: Nil)
 
-  val VItimeSchema: StructType =
+  val TSschema: StructType =
     StructType(StructField("ID", IntegerType, false) ::
     StructField("Timestamp", TimestampType, false) :: Nil)
 
@@ -100,7 +102,7 @@ object DatasetHelper {
     * @param sqlContext
     * @param indexedTable
     * @param schema
-    * @param complexFlag 1 in case of complex numbers 
+    * @param complexFlag 1 in case of complex numbers
     * @return
     */
   def fromArrayIndexedToDF(sc: SparkContext, sqlContext: SQLContext,
@@ -133,6 +135,28 @@ object DatasetHelper {
     val tableRDD = sc.parallelize(tableScala)
     val df: DataFrame = sqlContext.createDataFrame(tableRDD, schema)
     df
+  }
+
+  /**
+    * read a CSV file and add an ID index
+    * @param filename
+    * @return Array of Tuple2 where the first element of the tuple is the row of the csv and the second the index of the row
+    */
+  def fromCSVtoArrayAddingRowIndex(filename: String):
+  Array[(Array[String], Int)] = {
+    // each row is an array of strings (the columns in the csv file)
+    val rows = ArrayBuffer[Array[String]]()
+
+    // (1) read the csv data
+    val bufferedSource = io.Source.fromFile(filename)
+    for (line <- bufferedSource.getLines) {
+      rows += line.split(",").map(_.trim)
+    }
+    bufferedSource.close
+
+    val indexedTable: Array[(Array[String], Int)] = rows.toArray.zipWithIndex
+    indexedTable
+
   }
 
 }

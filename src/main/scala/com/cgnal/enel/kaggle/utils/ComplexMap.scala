@@ -8,7 +8,7 @@ import scala.math.pow
   * Created by cavaste on 10/08/16.
   *
   * Complex number are implemented in the Dataframe as a Map[String,Double]
-  * This object implemented all the operations performed on complex number
+  * This object implements all the operations needed on complex numbers
   */
 object ComplexMap {
 
@@ -42,9 +42,6 @@ object ComplexMap {
   }
   val complexProd = ((x: Map[String,Double], y: Map[String,Double]) => prod(x,y))
   val complexProdUDF = udf(complexProd)
-
-
-
 
 
 }

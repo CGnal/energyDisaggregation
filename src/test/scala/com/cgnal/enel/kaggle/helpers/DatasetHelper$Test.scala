@@ -1,7 +1,5 @@
 package com.cgnal.enel.kaggle.helpers
 
-
-import com.cgnal.enel.kaggle.utils.ManageDataset
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.sql.types.StructType
