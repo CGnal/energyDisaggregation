@@ -3,6 +3,10 @@ import sbt.Keys._
 val sparkVersion = "1.6.0-cdh5.7.0"
 val scalaVersionNumber: String = "2.10.6"
 
+fork in test := true
+parallelExecution in Test := false
+
+
 /**
   * working job
   */
@@ -10,6 +14,7 @@ lazy val energyDisaggregation: Project = (project in file("."))
   .settings(commonDependecies("energyDisaggregation"))
   //  .settings(name.:=("energyDisaggregation"))
   .settings(libraryDependencies ++= addSparkDependencies("provided"))
+
 
 /**
   * this is going to be used inside intelliJ IDEA

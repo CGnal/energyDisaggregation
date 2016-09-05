@@ -18,6 +18,15 @@ import scala.collection.immutable.IndexedSeq
 
 object DatasetHelper {
 
+  val VIschemaNoID: StructType =
+    StructType(
+      StructField("fund", MapType(StringType, DoubleType), false) ::
+        StructField("1H", MapType(StringType, DoubleType), false) ::
+        StructField("2H", MapType(StringType, DoubleType), false) ::
+        StructField("3H", MapType(StringType, DoubleType), false) ::
+        StructField("4H", MapType(StringType, DoubleType), false) ::
+        StructField("5H", MapType(StringType, DoubleType), false) :: Nil)
+
   // questo structype serve per dire a Scala come leggere la roba dal dataframe SQL
   // I paramteri MapType, StringType etc... fanno sì che dopo Scala sappia che la roba dentro il dataframe (che è un oggetto di Spark)
   // è ruspettivamente una mappa, string etc...
@@ -41,24 +50,17 @@ object DatasetHelper {
         StructField("I4H", MapType(StringType, DoubleType), false) ::
         StructField("I5H", MapType(StringType, DoubleType), false) :: Nil)
 
-  val VIschemaNoID: StructType =
-    StructType(
-      StructField("fund", MapType(StringType, DoubleType), false) ::
-        StructField("1H", MapType(StringType, DoubleType), false) ::
-        StructField("2H", MapType(StringType, DoubleType), false) ::
-        StructField("3H", MapType(StringType, DoubleType), false) ::
-        StructField("4H", MapType(StringType, DoubleType), false) ::
-        StructField("5H", MapType(StringType, DoubleType), false) :: Nil)
-
   val TSschema: StructType =
     StructType(StructField("ID", IntegerType, false) ::
-    StructField("Timestamp", TimestampType, false) :: Nil)
+    StructField("Timestamp", DoubleType, false) :: Nil)
 
   val TagSchema: StructType =
-    StructType(StructField("ApplianceID", IntegerType, false) ::
-      StructField("ApplianceName", StringType, false) ::
-      StructField("ON_Time", TimestampType, false) ::
-      StructField("OFF_Time", TimestampType, false) :: Nil)
+    StructType(
+      StructField("IDevent", IntegerType, false) ::
+        StructField("ApplianceID", IntegerType, false) ::
+        StructField("ApplianceName", StringType, false) ::
+        StructField("ON_Time", DoubleType, false) ::
+        StructField("OFF_Time", DoubleType, false) :: Nil)
 
   /**
     * read a csv of complex number and create a dataframe with no ID for the rows
@@ -84,9 +86,9 @@ object DatasetHelper {
       val rowComplexSplit: Array[String] = rowComplexTogether.flatMap((complex: String) => complex.split("((?=(?<=\\d)(\\-|\\+))|[i])"))
       val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
 
-      val complexKeys: List[Map[String, Double]] = (
+      val complexKeys: Array[Map[String, Double]] = (
         for (i <- 0 until complexNumber) yield Map(("re",rowComplexSplitDouble(2*i)), ("im", rowComplexSplitDouble(2*i+1)))
-        ).toList
+        ).toArray
 
       Row(complexKeys: _*)
       // la row è un oggetto di scala (rappresenta una riga del dataframe) ed è quella che vuole Structype per creare poi il df con la struttura voluta
@@ -105,30 +107,56 @@ object DatasetHelper {
     * @param complexFlag 1 in case of complex numbers
     * @return
     */
-  def fromArrayIndexedToDF(sc: SparkContext, sqlContext: SQLContext,
-                           indexedTable: Array[(Array[String], Int)], schema: StructType, complexFlag: Int): DataFrame = {
+  def fromArrayIndexedToDFTimestampOrFeatures(sc: SparkContext, sqlContext: SQLContext,
+                                              indexedTable: Array[(Array[String], Int)], schema: StructType, complexFlag: Int): DataFrame = {
 
     val tableScala: Array[Row] = indexedTable.map{ line =>
-      val rowComplexTogether: Array[String] = line._1
-      val complexNumber = rowComplexTogether.length
+      val rowString: Array[String] = line._1
+      val rowLength = rowString.length
 
-      if (complexNumber != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
+      if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
       val valuesOnRow = if (complexFlag == 1) {
-        val rowComplexSplit: Array[String] = rowComplexTogether.flatMap((complex: String) => complex.split("((?=(?<=\\d)(\\-|\\+))|[i])"))
+        val rowComplexSplit: Array[String] = rowString.flatMap((complex: String) => complex.split("((?=(?<=\\d)(\\-|\\+))|[i])"))
         val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
 
-        val valuesOnRow: List[Map[String, Double]] = (
-          for (i <- 0 until complexNumber) yield Map(("re", rowComplexSplitDouble(2 * i)), ("im", rowComplexSplitDouble(2 * i + 1)))
-          ).toList
+        val valuesOnRow: Array[Map[String, Double]] = (
+          for (i <- 0 until rowLength) yield Map(("re", rowComplexSplitDouble(2 * i)), ("im", rowComplexSplitDouble(2 * i + 1)))
+          ).toArray
         valuesOnRow
       }
       else {
-        val rowComplexSplit: Array[String] = rowComplexTogether.flatMap((complex: String) => complex.split(" "))
-        val valuesOnRow: List[Double] = rowComplexSplit.map(x => x.toDouble).toList
+        val valuesOnRow: Array[Double] = rowString.map(x => x.toDouble)
         valuesOnRow
       }
 
-      val IDandComplexKeys =  line._2 :: valuesOnRow
+      val IDandComplexKeys =  line._2 +: valuesOnRow
+      Row(IDandComplexKeys: _* )
+    }
+
+    val tableRDD = sc.parallelize(tableScala)
+    val df: DataFrame = sqlContext.createDataFrame(tableRDD, schema)
+    df
+  }
+
+
+  def fromArrayIndexedToDFTaggingInfo(sc: SparkContext, sqlContext: SQLContext,
+                                      indexedTable: Array[(Array[String], Int)], schema: StructType): DataFrame = {
+
+    val tableScala: Array[Row] = indexedTable.map{ line =>
+      val rowString: Array[String] = line._1
+      val rowLength = rowString.length
+
+      if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
+
+      val rowElementWithIndex: Array[(String, Int)] = rowString.zipWithIndex
+      val valuesOnRow: Array[AnyVal] = rowElementWithIndex.map(x => {
+        if (x._2 % 4 == 0) x._1.toInt
+        if (x._2 % 4 == 1) x._1.toString()
+        if (x._2 % 4 == 2) x._1.toDouble
+        if (x._2 % 4 == 3) x._1.toDouble
+      })
+
+      val IDandComplexKeys =  line._2 +: valuesOnRow
       Row(IDandComplexKeys: _* )
     }
 

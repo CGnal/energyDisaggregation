@@ -1,32 +1,34 @@
 package com.cgnal.enel.kaggle.utils
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
-import org.apache.spark.sql.{UserDefinedFunction, SQLContext}
+import org.apache.spark.sql.{DataFrame, UserDefinedFunction, SQLContext}
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.types._
 import org.apache.spark.{SparkContext, SparkConf}
-import org.scalatest.FunSuite
+import org.scalatest.{BeforeAndAfterEach, BeforeAndAfterAll, FunSuite}
+
+import ComplexMap$Test._
 
 /**
   * Created by cavaste on 12/08/16.
   */
-class ComplexMap$Test extends FunSuite {
+class ComplexMap$Test extends FunSuite with BeforeAndAfterAll{
 
-  val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
-  val sc = new SparkContext(conf)
-  val sqlContext = new SQLContext(sc)
+  override protected def beforeAll(): Unit = {
+    conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
+    sc = new SparkContext(conf)
+    sqlContext = new SQLContext(sc)
+    complexMathTestSchema =
+      StructType(StructField("ID1", MapType(StringType, DoubleType), false) ::
+        StructField("ID2", MapType(StringType, DoubleType), false) :: Nil)
+    df = DatasetHelper.fromCSVwithComplexToDF(sc, sqlContext,
+      filenameCompleMathTest, complexMathTestSchema)
+    df.printSchema()
+  }
 
-  val filenameCompleMathTest = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testVMath.csv"
-
-  val complexMathTestSchema: StructType =
-    StructType(StructField("ID1", MapType(StringType, DoubleType), false) ::
-      StructField("ID2", MapType(StringType, DoubleType), false) :: Nil)
-
-
-  val df = DatasetHelper.fromCSVwithComplexToDF(sc, sqlContext,
-    filenameCompleMathTest, complexMathTestSchema)
-
-  df.printSchema()
+  override protected def afterAll(): Unit = {
+    sc.stop()
+  }
 
   test("testProd") {
 
@@ -36,7 +38,11 @@ class ComplexMap$Test extends FunSuite {
     assert(df2.select("Prod").take(2)(1).getMap[String,Double](0).get("re").get === 8)
     assert(df2.select("Prod").take(2)(1).getMap[String,Double](0).get("im").get === -2)
 
+    df2.printSchema()
+
   }
+
+
 
   test("testConj") {
     val df2 = df.withColumn("Conj", ComplexMap.complexConjUDF(df.col("ID1")))
@@ -53,6 +59,7 @@ class ComplexMap$Test extends FunSuite {
     assert(df2.select("Power").take(2)(1).getMap[String,Double](0).get("re").get === -2)
     assert(df2.select("Power").take(2)(1).getMap[String,Double](0).get("im").get === -8)
 
+    df2.printSchema()
   }
 
 
@@ -83,4 +90,15 @@ class ComplexMap$Test extends FunSuite {
 
   }
 
+
+}
+
+object ComplexMap$Test {
+
+  var conf :SparkConf = _
+  var sc :SparkContext = _
+  var sqlContext: SQLContext  = _
+  val filenameCompleMathTest = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testVMath.csv"
+  var complexMathTestSchema: StructType = _
+  var df:DataFrame = _
 }
