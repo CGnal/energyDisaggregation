@@ -59,4 +59,4 @@ buildNumber.properties
 *.iml
 .idea
 
-metastore_db
+metastore_db/*
