@@ -1,6 +1,6 @@
 import sbt.Keys._
 
-val sparkVersion = "1.6.0-cdh5.7.0"
+val sparkVersion = "1.6.0"//-cdh5.7.0"
 val scalaVersionNumber: String = "2.10.6"
 
 fork in test := true
@@ -40,8 +40,10 @@ def commonDependecies(moduleName: String) = {
     javaOptions += "-Xms512m -Xmx2G",
     resolvers ++= Seq(
       Resolver.mavenLocal,
-      "Cloudera CDH" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
-      "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+//      "Cloudera CDH" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
+//      "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+      "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
+      "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
     ),
     libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.5" % "test"
   )
@@ -55,6 +57,7 @@ def commonDependecies(moduleName: String) = {
 def addSparkDependencies(scope: String): Seq[ModuleID] = Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % scope,
   "org.apache.spark" %% "spark-sql" % sparkVersion % scope,
+  "org.apache.spark" %% "spark-hive" % sparkVersion % scope,
   "org.apache.spark" %% "spark-streaming" % sparkVersion % scope,
   "org.apache.spark" %% "spark-mllib" % sparkVersion % scope
 )

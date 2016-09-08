@@ -32,7 +32,7 @@ object DatasetHelper {
   // è ruspettivamente una mappa, string etc...
   val Vschema: StructType =
     StructType(
-      StructField("ID", IntegerType, false) ::
+      StructField("IDtime", IntegerType, false) ::
         StructField("Vfund", MapType(StringType, DoubleType), false) ::
         StructField("V1H", MapType(StringType, DoubleType), false) ::
         StructField("V2H", MapType(StringType, DoubleType), false) ::
@@ -42,7 +42,7 @@ object DatasetHelper {
 
   val Ischema: StructType =
     StructType(
-      StructField("ID", IntegerType, false) ::
+      StructField("IDtime", IntegerType, false) ::
         StructField("Ifund", MapType(StringType, DoubleType), false) ::
         StructField("I1H", MapType(StringType, DoubleType), false) ::
         StructField("I2H", MapType(StringType, DoubleType), false) ::
@@ -51,16 +51,16 @@ object DatasetHelper {
         StructField("I5H", MapType(StringType, DoubleType), false) :: Nil)
 
   val TSschema: StructType =
-    StructType(StructField("ID", IntegerType, false) ::
-    StructField("Timestamp", DoubleType, false) :: Nil)
+    StructType(StructField("IDtime", IntegerType, false) ::
+    StructField("Timestamp", LongType, false) :: Nil)
 
   val TagSchema: StructType =
     StructType(
-      StructField("IDevent", IntegerType, false) ::
+      StructField("IDedge", IntegerType, false) ::
         StructField("ApplianceID", IntegerType, false) ::
         StructField("ApplianceName", StringType, false) ::
-        StructField("ON_Time", DoubleType, false) ::
-        StructField("OFF_Time", DoubleType, false) :: Nil)
+        StructField("ON_Time", LongType, false) ::
+        StructField("OFF_Time", LongType, false) :: Nil)
 
   /**
     * read a csv of complex number and create a dataframe with no ID for the rows
@@ -125,7 +125,7 @@ object DatasetHelper {
         valuesOnRow
       }
       else {
-        val valuesOnRow: Array[Double] = rowString.map(x => x.toDouble)
+        val valuesOnRow: Array[Long] = rowString.map(x => (BigDecimal(x)*10E7).toLongExact)//(x.toDouble*(10E7)).round)
         valuesOnRow
       }
 
@@ -148,13 +148,9 @@ object DatasetHelper {
 
       if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
 
-      val rowElementWithIndex: Array[(String, Int)] = rowString.zipWithIndex
-      val valuesOnRow: Array[AnyVal] = rowElementWithIndex.map(x => {
-        if (x._2 % 4 == 0) x._1.toInt
-        if (x._2 % 4 == 1) x._1.toString()
-        if (x._2 % 4 == 2) x._1.toDouble
-        if (x._2 % 4 == 3) x._1.toDouble
-      })
+      val valuesOnRow: Array[Any] = Array(rowString(0).toInt, rowString(1).toString.replace("\"", ""),
+//        (rowString(2).toDouble*(10E7)).round, (rowString(3).toDouble*(10E7)).round)
+        (BigDecimal(rowString(2))*10E7).toLongExact, (BigDecimal(rowString(3))*10E7).toLongExact)
 
       val IDandComplexKeys =  line._2 +: valuesOnRow
       Row(IDandComplexKeys: _* )

@@ -18,3 +18,7 @@ val pappo = Map(("x",3),("y",4))
 import scala.math.pow
 
 val d = pow(5,2)
+
+val ori = "pippo"
+
+val ente = "\"pippo\""

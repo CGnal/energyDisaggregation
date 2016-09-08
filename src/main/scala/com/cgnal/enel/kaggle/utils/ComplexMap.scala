@@ -43,5 +43,17 @@ object ComplexMap {
   val complexProd = ((x: Map[String,Double], y: Map[String,Double]) => prod(x,y))
   val complexProdUDF = udf(complexProd)
 
+  def quotDouble(x: Map[String, Double], y: Double): Map[String, Double] = {
+    x.map { case (k, v) => k -> (v/y) }
+  }
+
+  def sumArray(x: Array[Map[String,Double]], y: Array[Map[String,Double]]): Array[Map[String, Double]] = {
+    val xZipY = x.zip(y)
+    xZipY.map(el => ComplexMap.sum(el._1, el._2))
+  }
+
+  def quotArray(x: Array[Map[String,Double]], y: Double): Array[Map[String, Double]] = {
+    x.map(el => ComplexMap.quotDouble(el,y))
+  }
 
 }
