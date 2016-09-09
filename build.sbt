@@ -45,7 +45,10 @@ def commonDependecies(moduleName: String) = {
       "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
       "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
     ),
-    libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.5" % "test"
+//    libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.5" % "test"
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % "2.2.5" % "test"
+      )
   )
 }
 
@@ -55,9 +58,11 @@ def commonDependecies(moduleName: String) = {
   * @return
   */
 def addSparkDependencies(scope: String): Seq[ModuleID] = Seq(
+  "com.databricks" %% "spark-csv" % "1.5.0",
   "org.apache.spark" %% "spark-core" % sparkVersion % scope,
   "org.apache.spark" %% "spark-sql" % sparkVersion % scope,
   "org.apache.spark" %% "spark-hive" % sparkVersion % scope,
   "org.apache.spark" %% "spark-streaming" % sparkVersion % scope,
-  "org.apache.spark" %% "spark-mllib" % sparkVersion % scope
+  "org.apache.spark" %% "spark-mllib" % sparkVersion % scope,
+  "com.databricks" %% "spark-avro" % "2.0.1"
 )

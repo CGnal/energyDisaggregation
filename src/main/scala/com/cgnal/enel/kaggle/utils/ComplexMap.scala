@@ -2,6 +2,7 @@ package com.cgnal.enel.kaggle.utils
 
 import org.apache.spark.sql.functions.udf
 
+import scala.collection.mutable
 import scala.math.pow
 
 /**

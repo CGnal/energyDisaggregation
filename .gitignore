@@ -56,7 +56,9 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 
+metastore_db/*
+
 *.iml
 .idea
 
-metastore_db/*
+

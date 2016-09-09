@@ -62,6 +62,15 @@ object DatasetHelper {
         StructField("ON_Time", LongType, false) ::
         StructField("OFF_Time", LongType, false) :: Nil)
 
+  val SampleSubmissionSchema: StructType =
+    StructType(
+      StructField("ID", IntegerType, false) ::
+        StructField("House", StringType, false) ::
+        StructField("ApplianceID", IntegerType, false) ::
+        StructField("TimestampPrediction", LongType, false) ::
+        StructField("Predicted", IntegerType, false) :: Nil)
+
+
   /**
     * read a csv of complex number and create a dataframe with no ID for the rows
     * @deprecated
@@ -149,7 +158,6 @@ object DatasetHelper {
       if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
 
       val valuesOnRow: Array[Any] = Array(rowString(0).toInt, rowString(1).toString.replace("\"", ""),
-//        (rowString(2).toDouble*(10E7)).round, (rowString(3).toDouble*(10E7)).round)
         (BigDecimal(rowString(2))*10E7).toLongExact, (BigDecimal(rowString(3))*10E7).toLongExact)
 
       val IDandComplexKeys =  line._2 +: valuesOnRow
@@ -182,5 +190,31 @@ object DatasetHelper {
     indexedTable
 
   }
+
+
+/*  def fromCSVsampleSubmissiomToDF(sc: SparkContext, sqlContext: SQLContext,
+                                  filenameCSV: String, schema: StructType): DataFrame = {
+
+    val input: RDD[String] = sc.textFile(filenameCSV)
+    val tableRDD: RDD[Row] = input.map { line =>
+      val reader: CSVReader = new CSVReader(new StringReader(line))
+      val rowTogether: Array[String] = reader.readNext()
+      val columnNumber = rowTogether.length
+
+      if (columnNumber != schema.length) sys.error("schema length is not equal to the number of columns found in the CSV")
+      val rowComplexSplit: Array[String] = rowComplexTogether.flatMap((complex: String) => complex.split(",")
+      val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
+
+      val complexKeys: Array[Map[String, Double]] = (
+        for (i <- 0 until complexNumber) yield Map(("re",rowComplexSplitDouble(2*i)), ("im", rowComplexSplitDouble(2*i+1)))
+        ).toArray
+
+      Row(complexKeys: _*)
+      // la row è un oggetto di scala (rappresenta una riga del dataframe) ed è quella che vuole Structype per creare poi il df con la struttura voluta
+    }
+
+    val df: DataFrame = sqlContext.createDataFrame(tableRDD, schema)
+    df
+  }*/
 
 }
