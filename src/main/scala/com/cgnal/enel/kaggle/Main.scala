@@ -77,7 +77,7 @@ def mainFastCheck(): Unit = {
       //val filenameCSV_V="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
       //val filenameCSV_I="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
       //val filenameTimestamp="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
-      // val filenameTaggingInfo="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
+      val filenameTaggingInfo="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/TaggingInfo.csv"
 
 
       val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
@@ -122,40 +122,53 @@ def mainFastCheck(): Unit = {
 
       dfEdgeWindowsAppliance.printSchema()
 
-      dfEdgeWindowsAppliance.write
-        .avro("/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dfEdgeWindowsApplianceProva.csv")
+    //  dfEdgeWindowsAppliance.write
+      //  .avro("/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dfEdgeWindowsApplianceProva.csv")
 
+
+      movingAverage(dfVIfinal,slidingWindow = 2)
     }
 
 
-  /*def movingAverage(df: DataFrame,
-                    columnName_harmonics: String = "PowerFund",
+ def movingAverage(df: DataFrame,
+                    harmonics_ColName: String = "PowerFund",
                     slidingWindow: Int = 6,
-                    TimeStampNumeric_ColumnName: String =  "Timestamp"): DataFrame = {
+                    TimeStamp_ColName: String =  "Timestamp")/*: DataFrame =*/ {
 
-    val df_S =
-      df
-        // .filter(df_sensorData("DateTime").endsWith("00:00:00")) //take only entire days
-        .select(columnName_harmonics)
-        .dropDuplicates(Seq(columnName_harmonics))
-        //.orderBy(desc(TimeStampNumeric_ColumnName))
-        .cache()
+   val df_H = df.select(harmonics_ColName).cache()
+   val df_T = df.select(TimeStamp_ColName).cache()
 
-    val nRows = df_S.count().toInt
-    val lastWindowIndex = (nRows - slidingWindow)
-    //why orderby does not work ?
-    //  val firstdfSrow = df_S.orderBy(desc(TimeStampNumeric_ColumnName)).first()
-    //  val maxValue = firstdfSrow.get(firstdfSrow.fieldIndex(TimeStampNumeric_ColumnName)).toString.toLong
+    val nRows = df_H.count().toInt
+    val lastWindowIndex = nRows - slidingWindow
 
-    val maxAllowedTimeStamp = df_S.take(nRows)(0)  // alloz
-    val maxAllowedValue = df_S.take(lastWindowIndex)(0)
+   val maxValH = df_H.take(nRows).last
+   val maxAllowedValueH = df_H.take(lastWindowIndex+1).last
 
+   val maxTimeStamp = df_T.take(nRows).last
+   val maxAllowedTimeStamp = df_T.take(lastWindowIndex+1).last
+   df_H.show()
+   df_T.show()
 
-    val allowedTimeStamps: Array[Row] = df_S
-      .filter(df_S(TimeStampNumeric_ColumnName) < maxAllowedValue) //filter data for which there is no enough historical information
+   println("nRows: "+nRows)
+   println("slidingWindow: "+slidingWindow)
+   println("lastWindowIndex: "+lastWindowIndex)
+
+   println("maxValH:"+maxValH)
+   println("maxAllowedValueH: "+maxAllowedValueH)
+
+   println("maxTimeStamp:"+maxTimeStamp)
+   println("maxAllowedTimeStamp: "+maxAllowedTimeStamp)
+
+    val allowedTimeStamps: Array[Row] = df_H
+      .filter(df(TimeStamp_ColName) <= maxAllowedTimeStamp) //filter data for which there is no enough historical information
       .collect()
     //.take(1)
 
+
+   print(allowedTimeStamps)
+   //println("allowedTimeStamps"+allowedTimeStamps.)
+
+/*
     var i = 0
     val res = allowedTimeStamps
       .map(
@@ -163,17 +176,17 @@ def mainFastCheck(): Unit = {
           //generate features
           println("---- " + i + "/" + allowedTimeStamps.length + " ----")
           i = i + 1
-          // Pick up the n vlaues from the field columnName_harmonics and do the average
-          //val timeStampStart = row.getLong(row.fieldIndex(TimeStampNumeric_ColumnName))
+          // Pick up the n vlaues from the field harmonics_ColName and do the average
+          //val timeStampStart = row.getLong(row.fieldIndex(TimeStamp_ColName))
           //val timeStampEnd = timeStampStart + slidingWindow
           //val average = df_S.map()
 
 
         }
       )
-
-  }
 */
+  }
+
 
 
   def computeApplianceSignature(sc: SparkContext, sqlContext: SQLContext,
