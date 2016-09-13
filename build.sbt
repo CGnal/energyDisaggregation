@@ -13,7 +13,8 @@ parallelExecution in Test := false
 lazy val energyDisaggregation: Project = (project in file("."))
   .settings(commonDependecies("energyDisaggregation"))
   //  .settings(name.:=("energyDisaggregation"))
-  .settings(libraryDependencies ++= addSparkDependencies("provided"))
+  //.settings(libraryDependencies ++= addSparkDependencies("provided"))
+  .settings(libraryDependencies ++= addSparkDependencies("compile"))
 
 
 /**

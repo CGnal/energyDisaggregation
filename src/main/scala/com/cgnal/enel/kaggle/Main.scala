@@ -23,7 +23,34 @@ import org.apache.spark.sql.hive.HiveContext
 
 object Main {
 
-  def main(args: Array[String]) = {
+ def main(args: Array[String]): Unit = {
+   //println("pippo")
+   //mainFastCheck()
+   mainToUse(args)
+ }
+
+def mainFastCheck(): Unit = {
+
+  val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
+  val sc = new SparkContext(conf)
+  val sqlContext = new SQLContext(sc)
+  val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
+  val dfTest = DatasetHelper.fromCSVwithComplexToDF(sc,sqlContext,filenameCSV, DatasetHelper.VIschemaNoID)
+  dfTest.printSchema()
+  dfTest.show()
+  val TimeStampNumeric_ColumnName: String = "fund"
+  val df_S = dfTest.select(TimeStampNumeric_ColumnName).cache()
+  dfTest.select(TimeStampNumeric_ColumnName).cache()
+  //df_S.orederBy(desc(TimeStampNumeric_ColumnName)).first()
+  df_S.printSchema()
+  df_S.show()
+  println("pippo")
+}
+
+  //#########################################################
+
+
+  def mainToUse(args: Array[String]) = {
 
     val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
@@ -32,26 +59,26 @@ object Main {
     rootLogger.setLevel(Level.ERROR)
     val sqlContext = new SQLContext(sc)
 
-
     computeDfEdgeWindows(sc, sqlContext)
 
 //    computeApplianceSignature(sc, sqlContext,
 //      "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv",
 //      "PowerFund")
+
   }
 
     def computeDfEdgeWindows(sc: SparkContext, sqlContext: SQLContext) = {
 
       // TEST
-      //    val filenameCSV_V = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testV.csv"
-      //    val filenameCSV_I = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testI.csv"
-      //    val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/timestamp.csv"
+      val filenameCSV_V = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
+      val filenameCSV_I = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testI.csv"
+      val filenameTimestamp = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/timestamp.csv"
 
+      //val filenameCSV_V="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
+      //val filenameCSV_I="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
+      //val filenameTimestamp="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
+      // val filenameTaggingInfo="/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
 
-      val filenameCSV_V = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
-      val filenameCSV_I = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
-      val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
-      val filenameTaggingInfo = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
 
       val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
       val dfV: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
@@ -79,6 +106,10 @@ object Main {
         .withColumn("Power4H", ComplexMap.complexProdUDF(dfVI("V4H"), ComplexMap.complexConjUDF(dfVI("I4H"))))
         .withColumn("Power5H", ComplexMap.complexProdUDF(dfVI("V5H"), ComplexMap.complexConjUDF(dfVI("I5H"))))
 
+      dfVIfinal.printSchema()
+      dfVIfinal.cache()
+      dfVIfinal.show()
+
       val arrayTaggingInfo = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
       val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
         arrayTaggingInfo, DatasetHelper.TagSchema)
@@ -92,15 +123,63 @@ object Main {
       dfEdgeWindowsAppliance.printSchema()
 
       dfEdgeWindowsAppliance.write
-        .avro("/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv")
+        .avro("/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dfEdgeWindowsApplianceProva.csv")
+
     }
 
+
+  /*def movingAverage(df: DataFrame,
+                    columnName_harmonics: String = "PowerFund",
+                    slidingWindow: Int = 6,
+                    TimeStampNumeric_ColumnName: String =  "Timestamp"): DataFrame = {
+
+    val df_S =
+      df
+        // .filter(df_sensorData("DateTime").endsWith("00:00:00")) //take only entire days
+        .select(columnName_harmonics)
+        .dropDuplicates(Seq(columnName_harmonics))
+        //.orderBy(desc(TimeStampNumeric_ColumnName))
+        .cache()
+
+    val nRows = df_S.count().toInt
+    val lastWindowIndex = (nRows - slidingWindow)
+    //why orderby does not work ?
+    //  val firstdfSrow = df_S.orderBy(desc(TimeStampNumeric_ColumnName)).first()
+    //  val maxValue = firstdfSrow.get(firstdfSrow.fieldIndex(TimeStampNumeric_ColumnName)).toString.toLong
+
+    val maxAllowedTimeStamp = df_S.take(nRows)(0)  // alloz
+    val maxAllowedValue = df_S.take(lastWindowIndex)(0)
+
+
+    val allowedTimeStamps: Array[Row] = df_S
+      .filter(df_S(TimeStampNumeric_ColumnName) < maxAllowedValue) //filter data for which there is no enough historical information
+      .collect()
+    //.take(1)
+
+    var i = 0
+    val res = allowedTimeStamps
+      .map(
+        row => {
+          //generate features
+          println("---- " + i + "/" + allowedTimeStamps.length + " ----")
+          i = i + 1
+          // Pick up the n vlaues from the field columnName_harmonics and do the average
+          //val timeStampStart = row.getLong(row.fieldIndex(TimeStampNumeric_ColumnName))
+          //val timeStampEnd = timeStampStart + slidingWindow
+          //val average = df_S.map()
+
+
+        }
+      )
+
+  }
+*/
 
 
   def computeApplianceSignature(sc: SparkContext, sqlContext: SQLContext,
                                 dfEdgeWindowsFilename: String, selectedFeature: String) = {
 
-    val filenameSampleSubmission = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/SampleSubmission.csv"
+    val filenameSampleSubmission = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dataset/SampleSubmission.csv"
 
     val dfSampleSubmission = sqlContext.read
       .format("com.databricks.spark.csv")
@@ -117,9 +196,10 @@ object Main {
     val dfAverageWindowEdge: DataFrame = dfEdgeWindowsAppliance.groupBy("ApplianceID").agg(
       customMeanComplex(dfEdgeWindowsAppliance.col("ON_TimeWindow_" + selectedFeature)).as("custom_mean")
     )
+
+
+
   }
-
-
 
 
 
