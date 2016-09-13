@@ -4,17 +4,19 @@ import java.util
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.edgeDetection.edgeDetection
-import com.cgnal.enel.kaggle.utils.{CustomMeanComplex, ComplexMap}
+import com.cgnal.enel.kaggle.utils.{AverageOverComplex, ComplexMap}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 
 import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions.avg
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import com.databricks.spark.avro._
 import org.apache.spark.sql.hive.HiveContext
+
+import scala.reflect.ClassTag
 
 /**
   * Created by cavaste on 08/08/16.
@@ -33,20 +35,21 @@ object Main {
     val sqlContext = new SQLContext(sc)
 
 
-    computeDfEdgeWindows(sc, sqlContext)
+//    computeStoreDfEdgeWindows(sc, sqlContext)
 
-//    computeApplianceSignature(sc, sqlContext,
-//      "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv",
-//      "PowerFund")
+    computeEdgeSignatureAppliances[Map[String,Double]](sc, sqlContext,
+      "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv",
+      "PowerFund", classOf[Map[String,Double]])
   }
 
-    def computeDfEdgeWindows(sc: SparkContext, sqlContext: SQLContext) = {
+    def computeStoreDfEdgeWindows(selectedFeature: String,
+                                  timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long, edgeWindowSize: Int,
+                                  sc: SparkContext, sqlContext: SQLContext) = {
 
       // TEST
       //    val filenameCSV_V = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testV.csv"
       //    val filenameCSV_I = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testI.csv"
       //    val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/timestamp.csv"
-
 
       val filenameCSV_V = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
       val filenameCSV_I = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
@@ -68,8 +71,10 @@ object Main {
       dfTS.show(5)
 
       // dataframe with Voltage, Current and TimeTicks relative to a given Phase
-      val dfVI: DataFrame = dfV.join(dfI, dfV("IDtime") === dfI("IDtime")).drop(dfI("IDtime"))
-        .join(dfTS, dfV("IDtime") === dfTS("IDtime")).drop(dfTS("IDtime"))
+      val dfVI: DataFrame = dfV.join(dfI, "IDtime")
+        .join(dfTS, "IDtime")
+
+      dfVI.printSchema()
 
       // Adding Power = V * conj(I)
       val dfVIfinal = dfVI.withColumn("PowerFund", ComplexMap.complexProdUDF(dfV("Vfund"), ComplexMap.complexConjUDF(dfI("Ifund"))))
@@ -83,22 +88,22 @@ object Main {
       val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
         arrayTaggingInfo, DatasetHelper.TagSchema)
 
-      val dfEdgeWindows = edgeDetection.selectingEdgeWindowsSingleFeatureTimeInterval(dfVIfinal, dfTaggingInfo,
-        "PowerFund", 1L, 1L, 12, sc, sqlContext)
+      val dfEdgeWindows = edgeDetection.selectingEdgeWindowsFromTagWithTimeIntervalSingleFeature[Map[String,Double]](dfVIfinal, dfTaggingInfo,
+        selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
+        sc, sqlContext)
 
-      val dfEdgeWindowsAppliance: DataFrame = dfEdgeWindows.join(dfTaggingInfo, dfEdgeWindows("IDedge") === dfTaggingInfo("IDedge"))
-        .drop(dfTaggingInfo("IDedge"))
+      val dfEdgeWindowsTaggingInfo: DataFrame = dfEdgeWindows.join(dfTaggingInfo, "IDedge")
 
-      dfEdgeWindowsAppliance.printSchema()
+      dfEdgeWindowsTaggingInfo.printSchema()
 
-      dfEdgeWindowsAppliance.write
+      dfEdgeWindowsTaggingInfo.write
         .avro("/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv")
     }
 
 
-
-  def computeApplianceSignature(sc: SparkContext, sqlContext: SQLContext,
-                                dfEdgeWindowsFilename: String, selectedFeature: String) = {
+  def computeEdgeSignatureAppliances[SelFeatureType:ClassTag](sc: SparkContext, sqlContext: SQLContext,
+                                                              dfEdgeWindowsFilename: String, edgeWindowSize: Int,
+                                                              selectedFeature: String, selectedFeatureType: Class[SelFeatureType]) = {
 
     val filenameSampleSubmission = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/SampleSubmission.csv"
 
@@ -108,19 +113,40 @@ object Main {
       .option("inferSchema", "true") // Automatically infer data types
       .load(filenameSampleSubmission)
 
+    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
 
-    val dfEdgeWindowsAppliance = sqlContext.read.avro(dfEdgeWindowsFilename)
+    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename)
 
-    // define UDAF
-    val customMeanComplex = new CustomMeanComplex("ON_TimeWindow_" + selectedFeature, 12)
+    val dfEdgeSignaturesAll =
+    if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
+      // define UDAF
+      val averageOverComplexON = new AverageOverComplex("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
+      val averageOverComplexOFF = new AverageOverComplex("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
 
-    val dfAverageWindowEdge: DataFrame = dfEdgeWindowsAppliance.groupBy("ApplianceID").agg(
-      customMeanComplex(dfEdgeWindowsAppliance.col("ON_TimeWindow_" + selectedFeature)).as("custom_mean")
-    )
+
+      val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
+        averageOverComplexON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
+        averageOverComplexOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
+
+      dfEdgeSignatures.printSchema()
+      dfEdgeSignatures
+    }
+    else {
+
+      val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
+        avg("ON_TimeWindow_" + selectedFeature).as("ON_TimeSignature_" + selectedFeature),
+        avg("OFF_TimeWindow_" + selectedFeature).as("OFF_TimeSignature_" + selectedFeature))
+
+      dfEdgeSignatures.printSchema()
+      dfEdgeSignatures
+    }
+
+    val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
+      .drop(dfAppliancesToPredict("Appliance"))
+
+    dfEdgeSignatures
+
   }
-
-
-
 
 
 }

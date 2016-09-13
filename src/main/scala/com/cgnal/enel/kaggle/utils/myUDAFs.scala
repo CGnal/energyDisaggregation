@@ -12,7 +12,7 @@ import scala.collection.mutable
 //Extend UserDefinedAggregateFunction to write custom aggregate function
 //You can also specify any constructor arguments. For instance you
 //can have CustomMean(arg1: Int, arg2: String)
-class CustomMeanComplex(fieldname: String, arraySize: Int) extends UserDefinedAggregateFunction {
+class AverageOverComplex(fieldname: String, arraySize: Int) extends UserDefinedAggregateFunction {
 
   // Input Data Type Schema
   def inputSchema: StructType = StructType(Array(StructField(fieldname, ArrayType(MapType(StringType, DoubleType)))))
@@ -31,8 +31,7 @@ class CustomMeanComplex(fieldname: String, arraySize: Int) extends UserDefinedAg
 
   // This function is called whenever key changes
   def initialize(buffer: MutableAggregationBuffer) = {
-    val ente: Array[Map[String, Double]] = Array.fill(arraySize)(Map(("re", 0.toDouble), ("im", 0.toDouble))) // set sum to zero
-    buffer(0) = ente
+    buffer(0) = Array.fill(arraySize)(Map(("re", 0.toDouble), ("im", 0.toDouble))) // set sum to zero
     buffer(1) = 0L // set number of items to 0
   }
 
@@ -63,4 +62,54 @@ class CustomMeanComplex(fieldname: String, arraySize: Int) extends UserDefinedAg
       buffer.getLong(1).toDouble)
   }
 
+}
+
+class MSDwithRealFeature(selectedFeature: String, characteristicSignal: Array[Double]) extends UserDefinedAggregateFunction {
+  val windowSize = characteristicSignal.length
+
+  // Input Data Type Schema
+  def inputSchema: StructType = StructType(Array(StructField("Timestamp", LongType), StructField(selectedFeature, DoubleType)))
+
+  // Intermediate Schema
+  def bufferSchema = StructType(Array(
+    StructField("window", MapType(LongType,DoubleType)),
+    StructField("cnt", LongType)
+  ))
+
+  // Returned Data Type .
+  def dataType: DataType = DoubleType
+
+  // Self-explaining
+  def deterministic = true
+
+  // This function is called whenever key changes
+  def initialize(buffer: MutableAggregationBuffer) = {
+    buffer(0) =  Map[Long,Double]() // set sum to zero
+    buffer(1) = 0L // set number of items to 0
+  }
+
+  // Iterate over each entry of a group
+  def update(buffer: MutableAggregationBuffer, input: Row) = {
+    val currentMap: Map[Long, Double] = buffer.getAs[Map[Long,Double]](0)
+    buffer(0) = currentMap + (input.getLong(0) -> input.getDouble(1))
+    buffer(1) = buffer.getLong(1) + 1
+  }
+
+  // Merge two partial aggregates
+  def merge(buffer1: MutableAggregationBuffer, buffer2: Row) = {
+    buffer1(0) = buffer1.getAs[Map[Long,Double]](0) ++ buffer2.getAs[Map[Long,Double]](0)
+    buffer1(1) = buffer1.getLong(1) + buffer2.getLong(1)
+  }
+
+  // Called after all the entries are exhausted.
+  def evaluate(buffer: Row) = {
+    val completeMap = buffer.getAs[Map[Long,Double]](0)
+    val sortedKey: Seq[(Long, Int)] = completeMap.keySet.toSeq.sorted.zipWithIndex
+
+    val msd: Double = sortedKey.map(x => {
+      Math.pow(x._1 - characteristicSignal(x._2),2)
+    }).sum
+
+    msd
+  }
 }

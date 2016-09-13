@@ -16,9 +16,20 @@ val pappo = Map(("x",3),("y",4))
 
 
 import scala.math.pow
+import scala.reflect.ClassTag
 
 val d = pow(5,2)
 
 val ori = "pippo"
 
 val ente = "\"pippo\""
+
+
+val papa = Map()
+
+val tinoni = List(1,2,5,6,7,8,1,-5,-3,12).toSeq.sorted
+
+def mario[Tuo:ClassTag](x: Int) = {
+
+
+}
