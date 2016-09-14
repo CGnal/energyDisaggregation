@@ -4,12 +4,14 @@ import java.io.StringReader
 
 import au.com.bytecode.opencsv.CSVReader
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.expressions.{Window, WindowSpec}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, SQLContext, Row}
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.{SparkConf, SparkContext}
+
 import scala.collection.mutable.ArrayBuffer
 import scala.io
-
 import scala.collection.immutable.IndexedSeq
 
 /**
@@ -191,6 +193,21 @@ object DatasetHelper {
 
   }
 
+  def movingAverage(df: DataFrame,
+                    harmonics_ColName: String = "PowerFund",
+                    slidingWindow: Int = 6,
+                    TimeStamp_ColName: String =  "Timestamp"): DataFrame ={
+
+    val w: WindowSpec = Window
+      .orderBy(TimeStamp_ColName)
+      .rangeBetween(0,slidingWindow-1)
+
+    val df2 = df
+      .withColumn(
+        harmonics_ColName + "_localAvg",
+        avg(harmonics_ColName).over(w))
+    df2
+  }
 
 /*  def fromCSVsampleSubmissiomToDF(sc: SparkContext, sqlContext: SQLContext,
                                   filenameCSV: String, schema: StructType): DataFrame = {
