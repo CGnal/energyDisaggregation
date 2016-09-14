@@ -19,6 +19,12 @@ object ComplexMap {
   val complexSum = ((x: Map[String,Double], y: Map[String,Double]) => sum(x,y))
   val complexSumUDF = udf(complexSum)
 
+  val realPart = ((x: Map[String,Double]) => x.get("re").get)
+  val realPartUDF = udf(realPart)
+
+  val imPart = ((x: Map[String,Double]) => x.get("im").get)
+  val imPartUDF = udf(imPart)
+
   def subtraction(x: Map[String, Double], y: Map[String, Double]): Map[String, Double] = {
     x.map { case (k, v) => k -> (v - y.get(k).get) }
   }
@@ -32,7 +38,7 @@ object ComplexMap {
   val complexConjUDF = udf(complexConj)
 
   def abs(x: Map[String, Double]) = {
-    pow((x.get("re").get), 2) + pow(x.get("im").get, 2)
+    Math.sqrt(pow((x.get("re").get), 2) + pow(x.get("im").get, 2))
   }
   val complexAbs: (Map[String, Double]) => Double = ((x: Map[String,Double]) => abs(x))
   val complexAbsUDF = udf(complexAbs)

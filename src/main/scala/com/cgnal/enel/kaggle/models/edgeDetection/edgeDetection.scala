@@ -1,9 +1,10 @@
-package com.cgnal.enel.kaggle.models.edgeDetection
+package com.cgnal.enel.kaggle.models.EdgeDetection
 
 import java.security.Timestamp
 import java.util
 
 
+import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.utils.{MSDwithRealFeature, AverageOverComplex}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
@@ -17,11 +18,12 @@ import org.apache.spark.sql.functions.{min,max,abs,avg}
 import scala.collection
 import scala.collection.Map
 import scala.reflect.ClassTag
+import com.databricks.spark.avro._
 
 /**
   * Created by cavaste on 01/09/16.
   */
-object edgeDetection {
+object EdgeDetection {
 
   // TODO ottimizzare questo metodo che è lento a causa del fatto che dentro il map bisogna capire quale è IDtime più vicino a ON_time e OFF_Time
   def selectingEdgeWindowsFromTagWithNumberPointsSingleFeature(dfFeatures: DataFrame, dfTaggingInfo: DataFrame,
@@ -309,6 +311,7 @@ object edgeDetection {
     val msdOnRealFeature = new MSDwithRealFeature(selectedFeature, OnSignature)
     val msdOffRealFeature = new MSDwithRealFeature(selectedFeature, OffSignature)
 
+    // Edge score >= 0
     val dfFeaturesEdgeScore = dfFeatures.withColumn(
         "msdON_Time_" + selectedFeature,
         msdOnRealFeature(dfFeatures("Timestamp"),dfFeatures(selectedFeature)).over(w))
@@ -332,25 +335,101 @@ object edgeDetection {
     val minOff = dfMinMaxOff.head.getAs[Double]("min")
     val maxOff = dfMinMaxOff.head.getAs[Double]("max")
 
-
-    val dfFeaturesNormalizedEdgeScore = dfFeaturesEdgeScore.withColumn(
+    // Normalized edge score in [0,1]
+    val dfFeaturesNormalizedEdgeScoreTemp = dfFeaturesEdgeScore.withColumn(
       "nmsdON_Time_" + selectedFeature,
       (dfFeaturesEdgeScore("msdON_Time_" + selectedFeature) - minOn)/(maxOn-minOn))
       .withColumn(
         "nmsdOFF_Time_" + selectedFeature,
         (dfFeaturesEdgeScore("msdOFF_Time_" + selectedFeature) - minOff)/(maxOff-minOff))
 
+    // Delta Score in [-2,2]
+    val dfFeaturesNormalizedEdgeScoreTemp2 = dfFeaturesNormalizedEdgeScoreTemp.withColumn(
+      "DeltaScore_" + selectedFeature, dfFeaturesNormalizedEdgeScoreTemp("nmsdON_Time_" + selectedFeature)
+        - dfFeaturesNormalizedEdgeScoreTemp("nmsdOFF_Time_" + selectedFeature)
+    )
 
-    val dfFeaturesNormalizedEdgeScoreOutput = dfFeaturesNormalizedEdgeScore.filter($"Timestamp" > minTimestampAllowed)
+    val dfFeatureEdgeScoreAppliance = dfFeaturesNormalizedEdgeScoreTemp2.filter($"Timestamp" > minTimestampAllowed)
       .filter($"Timestamp" < maxTimestampAllowed)
 
-    dfFeaturesNormalizedEdgeScoreOutput
+    dfFeatureEdgeScoreAppliance
+  }
 
+
+  def computeStoreDfEdgeWindowsSingleFeature(dfFeatures: DataFrame,
+                                             filenameTaggingInfo: String, filenameDfEdgeWindowsFeature: String,
+                                             selectedFeature: String,
+                                             timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long, edgeWindowSize: Int,
+                                             sc: SparkContext, sqlContext: SQLContext) = {
+
+    val arrayTaggingInfo = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
+    val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
+      arrayTaggingInfo, DatasetHelper.TagSchema)
+
+    val dfEdgeWindows = selectingEdgeWindowsFromTagWithTimeIntervalSingleFeature[Map[String,Double]](dfFeatures, dfTaggingInfo,
+      selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
+      sc, sqlContext)
+
+    val dfEdgeWindowsTaggingInfo: DataFrame = dfEdgeWindows.join(dfTaggingInfo, "IDedge")
+
+    dfEdgeWindowsTaggingInfo.printSchema()
+
+    dfEdgeWindowsTaggingInfo.write
+      .avro(filenameDfEdgeWindowsFeature)
+
+    dfEdgeWindowsTaggingInfo
+  }
+
+
+  def computeEdgeSignatureAppliances[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
+                                                              selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
+                                                              filenameSampleSubmission: String,
+                                                              sc: SparkContext, sqlContext: SQLContext) = {
+
+    if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
+      sys.error("Selected Feature Type must be Double or Map[String,Double]")
+
+    val dfSampleSubmission = sqlContext.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true") // Use first line of all files as header
+      .option("inferSchema", "true") // Automatically infer data types
+      .load(filenameSampleSubmission)
+
+    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
+
+    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename)
+
+    val dfEdgeSignaturesAll =
+      if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
+        // define UDAF
+        val averageOverComplexON = new AverageOverComplex("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
+        val averageOverComplexOFF = new AverageOverComplex("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
+
+
+        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
+          averageOverComplexON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
+          averageOverComplexOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
+
+        dfEdgeSignatures.printSchema()
+        dfEdgeSignatures
+      }
+      else {
+
+        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
+          avg("ON_TimeWindow_" + selectedFeature).as("ON_TimeSignature_" + selectedFeature),
+          avg("OFF_TimeWindow_" + selectedFeature).as("OFF_TimeSignature_" + selectedFeature))
+
+        dfEdgeSignatures.printSchema()
+        dfEdgeSignatures
+      }
+
+    val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
+      .drop(dfAppliancesToPredict("Appliance"))
+
+    (dfEdgeSignatures, dfAppliancesToPredict)
   }
 
 }
-
-
 // TENTATIVO DI FARE IL PRIMO FILTRO SU DFfeatures e poi fare groupby
 /*  def selectingEdgeWindows2(dfFeatures: DataFrame, dfTaggingInfo: DataFrame,
                            selectedFeature: String, timestampIntervalPreEdge: Double, timestampIntervalPostEdge: Double,

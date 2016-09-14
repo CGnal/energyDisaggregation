@@ -3,12 +3,14 @@ package com.cgnal.enel.kaggle.helpers
 import java.io.StringReader
 
 import au.com.bytecode.opencsv.CSVReader
+import com.cgnal.enel.kaggle.utils.ComplexMap
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import org.apache.spark.{SparkContext, SparkConf}
 import scala.collection.mutable.ArrayBuffer
 import scala.io
+
 
 import scala.collection.immutable.IndexedSeq
 
@@ -73,6 +75,7 @@ object DatasetHelper {
 
   /**
     * read a csv of complex number and create a dataframe with no ID for the rows
+    *
     * @deprecated
     * @param sc
     * @param sqlContext
@@ -109,6 +112,7 @@ object DatasetHelper {
 
   /**
     * transform an Array of tuple with (content of the row, index of the row) in a dataframe with a column ID
+    *
     * @param sc
     * @param sqlContext
     * @param indexedTable
@@ -171,6 +175,7 @@ object DatasetHelper {
 
   /**
     * read a CSV file and add an ID index
+    *
     * @param filename
     * @return Array of Tuple2 where the first element of the tuple is the row of the csv and the second the index of the row
     */
@@ -189,6 +194,47 @@ object DatasetHelper {
     val indexedTable: Array[(Array[String], Int)] = rows.toArray.zipWithIndex
     indexedTable
 
+  }
+
+
+  def importingDatasetToDfHouseDay(filenameCSV_V: String, filenameCSV_I: String,
+                                   filenameTimestamp: String, filenameTaggingInfo: String,
+                                   sc: SparkContext, sqlContext: SQLContext): DataFrame = {
+
+    val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
+    val dfV: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
+      arrayV, DatasetHelper.Vschema, 1)
+
+    val arrayI = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_I)
+    val dfI: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
+      arrayI, DatasetHelper.Ischema, 1)
+
+    val arrayTimestamp = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTimestamp)
+    val dfTS: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
+      arrayTimestamp, DatasetHelper.TSschema, 0)
+
+    // dataframe with Voltage, Current and TimeTicks relative to a given Phase
+    val dfVI: DataFrame = dfV.join(dfI, "IDtime")
+      .join(dfTS, "IDtime")
+
+    dfVI.printSchema()
+
+    dfVI
+  }
+
+
+  def addPowerToDfFeatures(dfFeatures: DataFrame) = {
+    // Adding Power = V * conj(I)
+    val dfFeaturesPower = dfFeatures.withColumn("PowerFund", ComplexMap.complexProdUDF(dfFeatures("Vfund"), ComplexMap.complexConjUDF(dfFeatures("Ifund"))))
+      .withColumn("Power1H", ComplexMap.complexProdUDF(dfFeatures("V1H"), ComplexMap.complexConjUDF(dfFeatures("I1H"))))
+      .withColumn("Power2H", ComplexMap.complexProdUDF(dfFeatures("V2H"), ComplexMap.complexConjUDF(dfFeatures("I2H"))))
+      .withColumn("Power3H", ComplexMap.complexProdUDF(dfFeatures("V3H"), ComplexMap.complexConjUDF(dfFeatures("I3H"))))
+      .withColumn("Power4H", ComplexMap.complexProdUDF(dfFeatures("V4H"), ComplexMap.complexConjUDF(dfFeatures("I4H"))))
+      .withColumn("Power5H", ComplexMap.complexProdUDF(dfFeatures("V5H"), ComplexMap.complexConjUDF(dfFeatures("I5H"))))
+      .withColumn("RealPowerFund", ComplexMap.realPartUDF(dfFeatures("PowerFund")))
+      .withColumn("ApparentPowerFund", ComplexMap.complexAbsUDF(dfFeatures("PowerFund")))
+
+    dfFeaturesPower
   }
 
 
