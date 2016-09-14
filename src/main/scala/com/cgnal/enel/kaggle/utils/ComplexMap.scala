@@ -19,6 +19,7 @@ object ComplexMap {
   val complexSum = ((x: Map[String,Double], y: Map[String,Double]) => sum(x,y))
   val complexSumUDF = udf(complexSum)
 
+
   def subtraction(x: Map[String, Double], y: Map[String, Double]): Map[String, Double] = {
     x.map { case (k, v) => k -> (v - y.get(k).get) }
   }

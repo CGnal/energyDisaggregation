@@ -15,7 +15,8 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import com.databricks.spark.avro._
 import org.apache.spark.sql.hive.HiveContext
-
+import org.apache.spark.sql.expressions.{Window, WindowSpec}
+import org.apache.spark.sql.functions.{avg, max, min, sum}
 /**
   * Created by cavaste on 08/08/16.
   */
@@ -141,11 +142,12 @@ def mainFastCheck(): Unit = {
     val nRows = df_H.count().toInt
     val lastWindowIndex = nRows - slidingWindow
 
+   val maxTimeStamp: Long = df_T.take(nRows).last.getAs[Long](0)
    val maxValH = df_H.take(nRows).last
+
+   val maxAllowedTimeStamp: Long = df_T.take(lastWindowIndex+1).last.getAs[Long](0)
    val maxAllowedValueH = df_H.take(lastWindowIndex+1).last
 
-   val maxTimeStamp = df_T.take(nRows).last
-   val maxAllowedTimeStamp = df_T.take(lastWindowIndex+1).last
    df_H.show()
    df_T.show()
 
@@ -159,34 +161,31 @@ def mainFastCheck(): Unit = {
    println("maxTimeStamp:"+maxTimeStamp)
    println("maxAllowedTimeStamp: "+maxAllowedTimeStamp)
 
-    val allowedTimeStamps: Array[Row] = df_H
-      .filter(df(TimeStamp_ColName) <= maxAllowedTimeStamp) //filter data for which there is no enough historical information
+    val allowedTimeStamps: Array[Row] = df_T
+      .filter(df(TimeStamp_ColName) <= maxAllowedTimeStamp) //filter data within the last allowed timestamp
       .collect()
     //.take(1)
 
 
-   print(allowedTimeStamps)
-   //println("allowedTimeStamps"+allowedTimeStamps.)
+    val w: WindowSpec = Window
+      .orderBy(TimeStamp_ColName)
+      .rangeBetween(0,slidingWindow)
 
-/*
-    var i = 0
-    val res = allowedTimeStamps
-      .map(
-        row => {
-          //generate features
-          println("---- " + i + "/" + allowedTimeStamps.length + " ----")
-          i = i + 1
-          // Pick up the n vlaues from the field harmonics_ColName and do the average
-          //val timeStampStart = row.getLong(row.fieldIndex(TimeStamp_ColName))
-          //val timeStampEnd = timeStampStart + slidingWindow
-          //val average = df_S.map()
+    val df2 = df
+      .withColumn(
+        harmonics_ColName + "_localAvg",
+        avg(harmonics_ColName).over(w))
 
+    /*val df3 = df2
+      .filter(df2(harmonics_ColName) === df2(harmonics_ColName + "_localMax"))
 
-        }
-      )
-*/
+    val df4 = df3
+      .filter(df3(harmonics_ColName + "_localMax") !== df3(harmonics_ColName + "_localAvg"))
+      .select(timeStampColName, harmonics_ColName)
+
+    df4.filter(df4(harmonics_ColName)>absoluteThreshold)*/
+
   }
-
 
 
   def computeApplianceSignature(sc: SparkContext, sqlContext: SQLContext,
