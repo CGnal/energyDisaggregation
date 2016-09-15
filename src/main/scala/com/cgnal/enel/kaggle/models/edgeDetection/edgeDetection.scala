@@ -417,7 +417,7 @@ object EdgeDetection {
     dfEdgeWindowsTaggingInfo.write
       .avro(dfEdgeWindowsFilename)
 
-    dfEdgeWindowsTaggingInfo
+    (dfEdgeWindowsTaggingInfo, dfTaggingInfo)
   }
 
 
