@@ -20,3 +20,19 @@ val d = pow(5,2)
 val ori = "pippo"
 
 val ente = "\"pippo\""
+
+
+import org.apache.spark.sql._
+val row = Row(1, true, "a string", null)
+
+val firstValue = row.getInt(0)
+
+
+val pairs = sql("SELECT key, value FROM src").rdd.map {
+  case Row(key: Int, value: String) =>
+    key -> value
+}
+
+
+
+

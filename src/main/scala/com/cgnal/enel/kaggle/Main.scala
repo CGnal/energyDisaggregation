@@ -4,15 +4,15 @@ import java.util
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.edgeDetection.edgeDetection
-import com.cgnal.enel.kaggle.utils.{CustomMeanComplex, ComplexMap}
+import com.cgnal.enel.kaggle.utils.{ComplexMap, CustomMeanComplex, Resampling}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
+import java.io.{FileOutputStream, FileReader, ObjectOutputStream, StringReader}
 
-import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, SQLContext, Row}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import com.databricks.spark.avro._
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions.{avg, max, min, sum}
@@ -60,7 +60,28 @@ def mainFastCheck(): Unit = {
     Row(7l,	50d),//
     Row(8l,	20d),
     Row(9l,	-20d),
-    Row(10l,	-40d)
+    Row(10l,	-40d),
+    Row(11l,	-50d), //
+    Row(12l,	30d),
+    Row(13l,	-30d),
+    Row(14l,	150d),//
+    Row(15l,	150d),
+    Row(16l,	100d),
+    Row(17l,	102d),
+    Row(18l,	102d),
+    Row(19l,	90d),
+    Row(20l,	-70d),//
+    Row(21l,	-70d),
+    Row(22l,	-70d),
+    Row(23l,	-60d),
+    Row(24l,	50d),//
+    Row(25l,	20d),
+    Row(26l,	-20d),
+    Row(27l,	-30d),//
+    Row(28l,	-30d) ,
+    Row(29l,	10d),//
+    Row(30l,	10d),
+    Row(31l,	-30d)//
   )
 
   val schema: StructType =
@@ -70,10 +91,11 @@ def mainFastCheck(): Unit = {
   val dataDF: DataFrame = sqlContext.createDataFrame(sc.makeRDD(data), schema)
   dataDF.printSchema()
 
-  val averagedDF: DataFrame =  DatasetHelper.movingAverage(dataDF,harmonics_ColName = "feature",slidingWindow =4)
+  val averagedDF: DataFrame =  Resampling.movingAverage(dataDF,harmonics_ColName = "feature",slidingWindow =3,TimeStamp_ColName = "Timestamp")
   //println(averagedDF.take(1)(2).getDouble(0))
   averagedDF.show()
   println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
+
 }
 
   //#########################################################
@@ -156,13 +178,16 @@ def mainFastCheck(): Unit = {
 
 
 
-        val averagedDF =  DatasetHelper.movingAverage(dfVIfinal,harmonics_ColName = "Timestamp",slidingWindow = 3)
+        val averagedDF =  Resampling.movingAverage(dfVIfinal,harmonics_ColName = "Timestamp",slidingWindow = 3)
       //prova.select("Timestamp","Timestamp_localAvg").show()
         averagedDF.show()
 
+        val prova = Resampling.downSampling(dfVIfinal, samplingBinWindow = 6)
+        prova.show()
+
     }
 
-def downSampling(df: DataFrame, scalingFactor: Int = 6){}
+
 
 /*
   def computeApplianceSignature(sc: SparkContext, sqlContext: HiveContext,

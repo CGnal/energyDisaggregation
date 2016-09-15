@@ -4,7 +4,7 @@ import java.io.StringReader
 
 import au.com.bytecode.opencsv.CSVReader
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.expressions.{Window, WindowSpec}
+//import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
@@ -193,45 +193,29 @@ object DatasetHelper {
 
   }
 
-  def movingAverage(df: DataFrame,
-                    harmonics_ColName: String = "PowerFund",
-                    slidingWindow: Int = 6,
-                    TimeStamp_ColName: String =  "Timestamp"): DataFrame ={
+  /*  def fromCSVsampleSubmissiomToDF(sc: SparkContext, sqlContext: SQLContext,
+                                    filenameCSV: String, schema: StructType): DataFrame = {
 
-    val w: WindowSpec = Window
-      .orderBy(TimeStamp_ColName)
-      .rangeBetween(0,slidingWindow-1)
+      val input: RDD[String] = sc.textFile(filenameCSV)
+      val tableRDD: RDD[Row] = input.map { line =>
+        val reader: CSVReader = new CSVReader(new StringReader(line))
+        val rowTogether: Array[String] = reader.readNext()
+        val columnNumber = rowTogether.length
 
-    val df2 = df
-      .withColumn(
-        harmonics_ColName + "_localAvg",
-        avg(harmonics_ColName).over(w))
-    df2
-  }
+        if (columnNumber != schema.length) sys.error("schema length is not equal to the number of columns found in the CSV")
+        val rowComplexSplit: Array[String] = rowComplexTogether.flatMap((complex: String) => complex.split(",")
+        val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
 
-/*  def fromCSVsampleSubmissiomToDF(sc: SparkContext, sqlContext: SQLContext,
-                                  filenameCSV: String, schema: StructType): DataFrame = {
+        val complexKeys: Array[Map[String, Double]] = (
+          for (i <- 0 until complexNumber) yield Map(("re",rowComplexSplitDouble(2*i)), ("im", rowComplexSplitDouble(2*i+1)))
+          ).toArray
 
-    val input: RDD[String] = sc.textFile(filenameCSV)
-    val tableRDD: RDD[Row] = input.map { line =>
-      val reader: CSVReader = new CSVReader(new StringReader(line))
-      val rowTogether: Array[String] = reader.readNext()
-      val columnNumber = rowTogether.length
+        Row(complexKeys: _*)
+        // la row è un oggetto di scala (rappresenta una riga del dataframe) ed è quella che vuole Structype per creare poi il df con la struttura voluta
+      }
 
-      if (columnNumber != schema.length) sys.error("schema length is not equal to the number of columns found in the CSV")
-      val rowComplexSplit: Array[String] = rowComplexTogether.flatMap((complex: String) => complex.split(",")
-      val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
-
-      val complexKeys: Array[Map[String, Double]] = (
-        for (i <- 0 until complexNumber) yield Map(("re",rowComplexSplitDouble(2*i)), ("im", rowComplexSplitDouble(2*i+1)))
-        ).toArray
-
-      Row(complexKeys: _*)
-      // la row è un oggetto di scala (rappresenta una riga del dataframe) ed è quella che vuole Structype per creare poi il df con la struttura voluta
-    }
-
-    val df: DataFrame = sqlContext.createDataFrame(tableRDD, schema)
-    df
-  }*/
+      val df: DataFrame = sqlContext.createDataFrame(tableRDD, schema)
+      df
+    }*/
 
 }

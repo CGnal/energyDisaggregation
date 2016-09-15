@@ -5,6 +5,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuite}
 import DatasetHelper$Test._
+import com.cgnal.enel.kaggle.utils.Resampling
 import org.apache.spark.sql.hive.HiveContext
 
 /**
@@ -95,7 +96,7 @@ class DatasetHelper$Test extends FunSuite with BeforeAndAfterAll with BeforeAndA
 
 
   test("check movingAverage"){
-    val averagedDF: DataFrame =  DatasetHelper.movingAverage(dataDF,harmonics_ColName = "feature",slidingWindow =4)
+    val averagedDF: DataFrame =  Resampling.movingAverage(dataDF,harmonics_ColName = "feature",slidingWindow =4,TimeStamp_ColName = "Timestamp")
     //println(averagedDF.take(1)(2).getDouble(0))
    assert(averagedDF.take(1)(0).get(2) == 1.0)
    // assert(averagedDF.take(3)(2).getInt(0) === 2)
