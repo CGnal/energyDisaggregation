@@ -19,7 +19,7 @@ object ComplexMap {
   val complexSum = ((x: Map[String,Double], y: Map[String,Double]) => sum(x,y))
   val complexSumUDF = udf(complexSum)
 
-  val realPart = ((x: Map[String,Double]) => x.get("re").get)
+  val realPart: (Map[String, Double]) => Double = ((x: Map[String,Double]) => x.get("re").get)
   val realPartUDF = udf(realPart)
 
   val imPart = ((x: Map[String,Double]) => x.get("im").get)

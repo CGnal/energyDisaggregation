@@ -64,11 +64,75 @@ class AverageOverComplex(fieldname: String, arraySize: Int) extends UserDefinedA
 
 }
 
+
+
+
+class AverageOverReal(fieldname: String, arraySize: Int) extends UserDefinedAggregateFunction {
+
+  // Input Data Type Schema
+  def inputSchema: StructType = StructType(Array(StructField(fieldname, ArrayType(DoubleType))))
+
+  // Intermediate Schema
+  def bufferSchema = StructType(Array(
+    StructField("sum", ArrayType(DoubleType)),
+    StructField("cnt", LongType)
+  ))
+
+  // Returned Data Type .
+  def dataType: DataType = ArrayType(DoubleType)
+
+  // Self-explaining
+  def deterministic = true
+
+  // This function is called whenever key changes
+  def initialize(buffer: MutableAggregationBuffer) = {
+    buffer(0) = Array.fill(arraySize)(0.toDouble) // set sum to zero
+    buffer(1) = 0L // set number of items to 0
+  }
+
+  // Iterate over each entry of a group
+  def update(buffer: MutableAggregationBuffer, input: Row) = {
+
+    val buffer0Array = buffer.getAs[mutable.WrappedArray[Double]](0)
+      .toArray[Double]
+    val buffer1Array = input.getAs[mutable.WrappedArray[Double]](0)
+      .toArray[Double]
+    val xZipY = buffer0Array.zip(buffer1Array)
+    buffer(0) = xZipY.map(el => el._1 + el._2)
+
+    buffer(1) = buffer.getLong(1) + 1
+  }
+
+  // Merge two partial aggregates
+  def merge(buffer1: MutableAggregationBuffer, buffer2: Row) = {
+    val buffer0Array = buffer1.getAs[mutable.WrappedArray[Double]](0)
+      .toArray[Double]
+    val buffer1Array = buffer2.getAs[mutable.WrappedArray[Double]](0)
+      .toArray[Double]
+    val xZipY = buffer0Array.zip(buffer1Array)
+    buffer1(0) = xZipY.map(el => el._1 + el._2)
+
+    buffer1(1) = buffer1.getLong(1) + buffer2.getLong(1)
+  }
+
+  // Called after all the entries are exhausted.
+  def evaluate(buffer: Row) = {
+    val finalArray = buffer.getAs[mutable.WrappedArray[Double]](0).toArray[Double]
+    finalArray.map(el => el/buffer.getLong(1).toDouble)
+  }
+
+}
+
+
+
 class MSDwithRealFeature(selectedFeature: String, characteristicSignal: Array[Double]) extends UserDefinedAggregateFunction {
+
   val windowSize = characteristicSignal.length
 
   // Input Data Type Schema
-  def inputSchema: StructType = StructType(Array(StructField("Timestamp", LongType), StructField(selectedFeature, DoubleType)))
+  def inputSchema: StructType = StructType(
+    StructField("Timestamp", LongType, false) ::
+    StructField(selectedFeature, DoubleType, false) :: Nil)
 
   // Intermediate Schema
   def bufferSchema = StructType(Array(
@@ -111,5 +175,50 @@ class MSDwithRealFeature(selectedFeature: String, characteristicSignal: Array[Do
     }).sum
 
     msd
+  }
+}
+
+
+
+class ProvaUDAF extends UserDefinedAggregateFunction {
+
+  // Input Data Type Schema
+  def inputSchema: StructType = StructType(
+    StructField("IDtime", IntegerType, false) :: Nil)
+
+  // Intermediate Schema
+  def bufferSchema = StructType(Array(
+    StructField("window", IntegerType),
+    StructField("cnt", LongType)
+  ))
+
+  // Returned Data Type .
+  def dataType: IntegerType = IntegerType
+
+  // Self-explaining
+  def deterministic = true
+
+  // This function is called whenever key changes
+  def initialize(buffer: MutableAggregationBuffer) = {
+    buffer(0) = 0 // set sum to zero
+    buffer(1) = 0 // set number of items to 0
+  }
+
+  // Iterate over each entry of a group
+  def update(buffer: MutableAggregationBuffer, input: Row) = {
+    val currentMap = buffer.getAs[Int](0)
+    buffer(0) = currentMap + input.getInt(0)
+    buffer(1) = buffer.getLong(1) + 1
+  }
+
+  // Merge two partial aggregates
+  def merge(buffer1: MutableAggregationBuffer, buffer2: Row) = {
+    buffer1(0) = buffer1.getAs[Int](0) + buffer2.getAs[Int](0)
+    buffer1(1) = buffer1.getLong(1) + buffer2.getLong(1)
+  }
+
+  // Called after all the entries are exhausted.
+  def evaluate(buffer: Row) = {
+    buffer.getAs[Int](0)
   }
 }
