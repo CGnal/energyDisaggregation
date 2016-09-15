@@ -14,7 +14,6 @@ import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import com.databricks.spark.avro._
-import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions.{avg, max, min, sum}
 import org.apache.spark.sql.hive.HiveContext
@@ -28,8 +27,8 @@ object Main {
 
  def main(args: Array[String]): Unit = {
    //println("pippo")
-   //mainFastCheck()
-   mainToUse(args)
+   mainFastCheck()
+   //mainToUse(args)
  }
 
 def mainFastCheck(): Unit = {
@@ -37,9 +36,9 @@ def mainFastCheck(): Unit = {
   val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
   val sc = new SparkContext(conf)
   //val sqlContext = new SQLContext(sc)
-  val hiveContext = new HiveContext(sc)
+  val sqlContext = new HiveContext(sc)
   val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
-  val dfTest = DatasetHelper.fromCSVwithComplexToDF(sc,hiveContext,filenameCSV, DatasetHelper.VIschemaNoID)
+  val dfTest = DatasetHelper.fromCSVwithComplexToDF(sc,sqlContext,filenameCSV, DatasetHelper.VIschemaNoID)
   dfTest.printSchema()
   dfTest.show()
   val TimeStampNumeric_ColumnName: String = "fund"
@@ -49,6 +48,32 @@ def mainFastCheck(): Unit = {
   df_S.printSchema()
   df_S.show()
   println("pippo")
+
+
+  val data = Seq(
+    Row(1l,	-101d),
+    Row(2l,	100d),
+    Row(3l,	105d),  //
+    Row(4l,	-100d),
+    Row(5l,	-90d),
+    Row(6l,	-120d),//
+    Row(7l,	50d),//
+    Row(8l,	20d),
+    Row(9l,	-20d),
+    Row(10l,	-40d)
+  )
+
+  val schema: StructType =
+    StructType(
+      StructField("Timestamp", LongType, false) ::
+        StructField("feature", DoubleType, false) :: Nil)
+  val dataDF: DataFrame = sqlContext.createDataFrame(sc.makeRDD(data), schema)
+  dataDF.printSchema()
+
+  val averagedDF: DataFrame =  DatasetHelper.movingAverage(dataDF,harmonics_ColName = "feature",slidingWindow =4)
+  //println(averagedDF.take(1)(2).getDouble(0))
+  averagedDF.show()
+  println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
 }
 
   //#########################################################
@@ -61,8 +86,8 @@ def mainFastCheck(): Unit = {
     val rootLogger = Logger.getRootLogger()
     rootLogger.setLevel(Level.ERROR)
 //    val sqlContext = new SQLContext(sc)
-    val hiveContext = new HiveContext(sc)
-    computeDfEdgeWindows(sc, hiveContext)
+    val sqlContext = new HiveContext(sc)
+    computeDfEdgeWindows(sc, sqlContext)
 
 //    computeApplianceSignature(sc, sqlContext,
 //      "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv",
@@ -71,7 +96,7 @@ def mainFastCheck(): Unit = {
   }
 
 //    def computeDfEdgeWindows(sc: SparkContext, sqlContext: SQLContext) = {
-      def computeDfEdgeWindows(sc: SparkContext, hiveContext: HiveContext) = {
+      def computeDfEdgeWindows(sc: SparkContext, sqlContext: HiveContext) = {
 
       // TEST
       val filenameCSV_V = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
@@ -85,15 +110,15 @@ def mainFastCheck(): Unit = {
 
 
       val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
-      val dfV: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, hiveContext,
+      val dfV: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
         arrayV, DatasetHelper.Vschema, 1)
 
       val arrayI = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_I)
-      val dfI: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, hiveContext,
+      val dfI: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
         arrayI, DatasetHelper.Ischema, 1)
 
       val arrayTimestamp = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTimestamp)
-      val dfTS: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, hiveContext,
+      val dfTS: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
         arrayTimestamp, DatasetHelper.TSschema, 0)
 
       dfTS.show(5)
@@ -115,11 +140,11 @@ def mainFastCheck(): Unit = {
       dfVIfinal.show()
 
       val arrayTaggingInfo = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
-      val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, hiveContext,
+      val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
         arrayTaggingInfo, DatasetHelper.TagSchema)
 
       val dfEdgeWindows = edgeDetection.selectingEdgeWindowsSingleFeatureTimeInterval(dfVIfinal, dfTaggingInfo,
-        "PowerFund", 1L, 1L, 12, sc, hiveContext)
+        "PowerFund", 1L, 1L, 12, sc, sqlContext)
 
       val dfEdgeWindowsAppliance: DataFrame = dfEdgeWindows.join(dfTaggingInfo, dfEdgeWindows("IDedge") === dfTaggingInfo("IDedge"))
         .drop(dfTaggingInfo("IDedge"))
@@ -129,67 +154,30 @@ def mainFastCheck(): Unit = {
     //  dfEdgeWindowsAppliance.write
       //  .avro("/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dfEdgeWindowsApplianceProva.csv")
 
-        val data = Seq(
-          Row(1l,	-101d),
-          Row(2l,	100d),
-          Row(3l,	105d),  //
-          Row(4l,	-100d),
-          Row(5l,	-90d),
-          Row(6l,	-120d),//
-          Row(7l,	50d),//
-          Row(8l,	20d),
-          Row(9l,	-20d),
-          Row(10l,	-40d),
-          Row(11l,	-50d), //
-          Row(12l,	30d),
-          Row(13l,	-30d),
-          Row(14l,	150d),//
-          Row(15l,	150d),
-          Row(16l,	100d),
-          Row(17l,	102d),
-          Row(18l,	102d),
-          Row(19l,	90d),
-          Row(20l,	-70d),//
-          Row(21l,	-70d),
-          Row(22l,	-70d),
-          Row(23l,	-60d),
-          Row(24l,	50d),//
-          Row(25l,	20d),
-          Row(26l,	-20d),
-          Row(27l,	-30d),//
-          Row(28l,	-30d) ,
-          Row(29l,	10d),//
-          Row(30l,	10d),
-          Row(31l,	-30d)//
-        )
 
-        val schema: StructType =
-          StructType(
-            StructField("Timestamp", LongType, false) ::
-              StructField("feature", DoubleType, false) :: Nil)
-        val DF = hiveContext.createDataFrame(sc.makeRDD(data), schema)
 
-        val prova =  DatasetHelper.movingAverage(DF,harmonics_ColName = "feature",slidingWindow = 3)
+        val averagedDF =  DatasetHelper.movingAverage(dfVIfinal,harmonics_ColName = "Timestamp",slidingWindow = 3)
       //prova.select("Timestamp","Timestamp_localAvg").show()
-        prova.show()
+        averagedDF.show()
 
     }
 
-def downSampling(df: DataFrame, scalingFactor = )
+def downSampling(df: DataFrame, scalingFactor: Int = 6){}
 
-  def computeApplianceSignature(sc: SparkContext, hiveContext: HiveContext,
+/*
+  def computeApplianceSignature(sc: SparkContext, sqlContext: HiveContext,
                                 dfEdgeWindowsFilename: String, selectedFeature: String) = {
 
     val filenameSampleSubmission = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dataset/SampleSubmission.csv"
 
-    val dfSampleSubmission = hiveContext.read
+    val dfSampleSubmission = sqlContext.read
       .format("com.databricks.spark.csv")
       .option("header", "true") // Use first line of all files as header
       .option("inferSchema", "true") // Automatically infer data types
       .load(filenameSampleSubmission)
 
 
-    val dfEdgeWindowsAppliance = hiveContext.read.avro(dfEdgeWindowsFilename)
+    val dfEdgeWindowsAppliance = sqlContext.read.avro(dfEdgeWindowsFilename)
 
     // define UDAF
     val customMeanComplex = new CustomMeanComplex("ON_TimeWindow_" + selectedFeature, 12)
@@ -200,6 +188,7 @@ def downSampling(df: DataFrame, scalingFactor = )
 
 
   }
+*/
 
 
 
