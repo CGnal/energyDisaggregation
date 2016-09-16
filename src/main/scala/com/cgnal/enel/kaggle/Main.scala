@@ -31,7 +31,63 @@ import scala.util.{Failure, Success, Try}
 
 object Main {
 
-  def main(args: Array[String]) = {
+  def main(args: Array[String]): Unit = {
+    //println("pippo")
+    mainFastCheck()
+    //mainToUse(args)
+  }
+
+  def mainFastCheck(): Unit = {
+
+    val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
+    val sc = new SparkContext(conf)
+    //val sqlContext = new SQLContext(sc)
+    val sqlContext = new HiveContext(sc)
+    val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
+
+    val data = Seq(
+      Row(1l,	-101d), Row(2l,	100d), Row(3l,	105d), Row(4l,	-100d),
+      Row(5l,	-90d), Row(6l,	-120d), Row(7l,	50d), Row(8l,	20d),
+      Row(9l,	-20d), Row(10l,	-40d), Row(11l,	-50d), Row(12l,	30d),
+      Row(13l,	-30d), Row(14l,	150d), Row(15l,	150d), Row(16l,	100d), Row(17l,	102d), Row(18l,	102d), Row(19l,	90d), Row(20l,	-70d),
+      Row(21l,	-70d), Row(22l,	-70d),
+      Row(23l,	-60d), Row(24l,	50d), Row(25l,	20d), Row(26l,	-20d), Row(27l,	-30d), Row(28l,	-30d) , Row(29l,	10d), Row(30l,	10d), Row(31l,	-30d)//
+    )
+
+    val schema: StructType =
+      StructType(
+        StructField("Timestamp", LongType, false) ::
+          StructField("feature", DoubleType, false) :: Nil)
+    val dataDF: DataFrame = sqlContext.createDataFrame(sc.makeRDD(data), schema)
+    dataDF.printSchema()
+
+    val averagedDF: DataFrame =  Resampling.movingAverageReal(dataDF,selectedFeature = "feature",slidingWindowSize =3,TimeStamp_ColName = "Timestamp")
+
+    //println(averagedDF.take(1)(2).getDouble(0))
+    averagedDF.show()
+    println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
+
+    val selectedFeature = "feature"
+    val timestampCol = "Timestamp"
+
+    val w: WindowSpec = Window
+      .orderBy(timestampCol)
+      .rangeBetween(0,1)
+
+    averagedDF
+      .withColumn(
+        timestampCol+"_FirstDifference",
+        lag(averagedDF.col(timestampCol),offset = 1) over w
+      )
+
+    averagedDF.show()
+
+  }
+
+  //#########################################################
+
+
+  def mainToUse(args: Array[String]) = {
 
     val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
@@ -144,84 +200,6 @@ object Main {
       "TimestampPrediction", nrOfAppliances, nrOfThresholds)
 
     HLoverThreshold.foreach(x => println(x._1, x._2))
-  }
-
-
-
-
-
-
-
-
-  def mainFastCheck(): Unit = {
-
- /*   val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
-    val sc = new SparkContext(conf)
-    //val sqlContext = new SQLContext(sc)
-    val sqlContext = new HiveContext(sc)
-    val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
-    val dfTest = DatasetHelper.fromCSVwithComplexToDF(sc,sqlContext,filenameCSV, DatasetHelper.VIschemaNoID)
-    dfTest.printSchema()
-    dfTest.show()
-    val TimeStampNumeric_ColumnName: String = "fund"
-    val df_S = dfTest.select(TimeStampNumeric_ColumnName).cache()
-    dfTest.select(TimeStampNumeric_ColumnName).cache()
-    //df_S.orederBy(desc(TimeStampNumeric_ColumnName)).first()
-    df_S.printSchema()
-    df_S.show()
-    println("pippo")
-*/
-
-
-
-
-
-    val data = Seq(
-      Row(1l,	-101d),
-      Row(2l,	100d),
-      Row(3l,	105d),  //
-      Row(4l,	-100d),
-      Row(5l,	-90d),
-      Row(6l,	-120d),//
-      Row(7l,	50d),//
-      Row(8l,	20d),
-      Row(9l,	-20d),
-      Row(10l,	-40d),
-      Row(11l,	-50d), //
-      Row(12l,	30d),
-      Row(13l,	-30d),
-      Row(14l,	150d),//
-      Row(15l,	150d),
-      Row(16l,	100d),
-      Row(17l,	102d),
-      Row(18l,	102d),
-      Row(19l,	90d),
-      Row(20l,	-70d),//
-      Row(21l,	-70d),
-      Row(22l,	-70d),
-      Row(23l,	-60d),
-      Row(24l,	50d),//
-      Row(25l,	20d),
-      Row(26l,	-20d),
-      Row(27l,	-30d),//
-      Row(28l,	-30d) ,
-      Row(29l,	10d),//
-      Row(30l,	10d),
-      Row(31l,	-30d)//
-    )
-
- /*   val schema: StructType =
-      StructType(
-        StructField("Timestamp", LongType, false) ::
-          StructField("feature", DoubleType, false) :: Nil)
-    val dataDF: DataFrame = sqlContext.createDataFrame(sc.makeRDD(data), schema)
-    dataDF.printSchema()
-
-    val averagedDF: DataFrame =  Resampling.movingAverageReal(dataDF,selectedFeature="feature",slidingWindowSize=3,TimeStamp_ColName = "Timestamp")
-    //println(averagedDF.take(1)(2).getDouble(0))
-    averagedDF.show()
-    println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
-*/
   }
 
 
