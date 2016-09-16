@@ -15,7 +15,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import com.databricks.spark.avro._
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
-import org.apache.spark.sql.functions.{avg, max, min, sum}
+import org.apache.spark.sql.functions.{avg, max, min, sum, lag}
 import org.apache.spark.sql.hive.HiveContext
 
 /**
@@ -38,16 +38,16 @@ def mainFastCheck(): Unit = {
   //val sqlContext = new SQLContext(sc)
   val sqlContext = new HiveContext(sc)
   val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
-  val dfTest = DatasetHelper.fromCSVwithComplexToDF(sc,sqlContext,filenameCSV, DatasetHelper.VIschemaNoID)
-  dfTest.printSchema()
-  dfTest.show()
-  val TimeStampNumeric_ColumnName: String = "fund"
-  val df_S = dfTest.select(TimeStampNumeric_ColumnName).cache()
-  dfTest.select(TimeStampNumeric_ColumnName).cache()
-  //df_S.orederBy(desc(TimeStampNumeric_ColumnName)).first()
-  df_S.printSchema()
-  df_S.show()
-  println("pippo")
+  //val dfTest = DatasetHelper.fromCSVwithComplexToDF(sc,sqlContext,filenameCSV, DatasetHelper.VIschemaNoID)
+  //dfTest.printSchema()
+  //dfTest.show()
+  //val TimeStampNumeric_ColumnName: String = "fund"
+  //val df_S = dfTest.select(TimeStampNumeric_ColumnName).cache()
+ // dfTest.select(TimeStampNumeric_ColumnName).cache()
+ // //df_S.orederBy(desc(TimeStampNumeric_ColumnName)).first()
+  //df_S.printSchema()
+  //df_S.show()
+  //println("pippo")
 
 
   val data = Seq(
@@ -95,6 +95,17 @@ def mainFastCheck(): Unit = {
   //println(averagedDF.take(1)(2).getDouble(0))
   averagedDF.show()
   println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
+
+  val harmonics_ColName = "feature"
+
+  averagedDF
+    .withColumn(
+      harmonics_ColName+"_FirstDifference",
+      lag(averagedDF.col(harmonics_ColName),offset = 1)
+    )
+
+  averagedDF.show()
+
 
 }
 
@@ -176,14 +187,6 @@ def mainFastCheck(): Unit = {
     //  dfEdgeWindowsAppliance.write
       //  .avro("/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/dfEdgeWindowsApplianceProva.csv")
 
-
-
-        val averagedDF =  Resampling.movingAverage(dfVIfinal,harmonics_ColName = "Timestamp",slidingWindow = 3)
-      //prova.select("Timestamp","Timestamp_localAvg").show()
-        averagedDF.show()
-
-        val prova = Resampling.downSampling(dfVIfinal, samplingBinWindow = 6)
-        prova.show()
 
     }
 
