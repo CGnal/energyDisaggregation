@@ -1,5 +1,12 @@
 package com.cgnal.efm.predmain.uta.timeseries
 
+
+import java.util
+import java.util.Collections
+
+import collection.JavaConverters._
+import scala.collection.breakOut
+
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions.{avg, max, min, sum}
@@ -37,10 +44,10 @@ object TimeSeriesUtils {
         max(seriesColName).over(w))
       .withColumn(
         seriesColName + "_localAvg",
-        avg(seriesColName).over(w))
+        avg(seriesColName).over(w)).cache()
 
     val df3 = df2
-      .filter(df2(seriesColName) === df2(seriesColName + "_localMax"))
+      .filter(df2(seriesColName) === df2(seriesColName + "_localMax")).cache()
 
     val df4 = df3
       .filter(df3(seriesColName + "_localMax") !== df3(seriesColName + "_localAvg"))
@@ -74,14 +81,17 @@ object TimeSeriesUtils {
         min(seriesColName).over(w))
       .withColumn(
         seriesColName + "_localAvg",
-        avg(seriesColName).over(w))
+        avg(seriesColName).over(w)).cache()
 
     val df3 = df2
-      .filter(df2(seriesColName) === df2(seriesColName + "_localMin"))
+      .filter(df2(seriesColName) === df2(seriesColName + "_localMin")).cache()
 
     val df4 = df3
       .filter(df3(seriesColName + "_localMin") !== df3(seriesColName + "_localAvg"))
       .select(timeStampColName, seriesColName)
+
+    df2.unpersist()
+    df3.unpersist()
 
     df4.filter(df4(seriesColName)<absoluteThreshold)
   }
@@ -170,7 +180,6 @@ object TimeSeriesUtils {
       onOffWindows.flatMap(tuple => tuple._1 to tuple._2 by step)
 
 
-
     val predictionRangesBC =
       dfEdgeScores.sqlContext.sparkContext
         .broadcast[Array[Long]](predictionRanges)
@@ -182,7 +191,6 @@ object TimeSeriesUtils {
           .isin(predictionRangesBC.value:_*).cast(IntegerType))
 
     df.select(timeStampColName, "prediction")
-
   }
 
 
@@ -230,6 +238,8 @@ object TimeSeriesUtils {
                            threshold: Double
                          ) = {
 
+    println("evaluate HAMMING LOSS for appliance: " + nrOfAppliances.toString + " with threshold: " + threshold.toString)
+
     val predictionsDf: DataFrame = buildPrediction(
       dfEdgeScores, threshold, scoresColName, timeStampColName)
 
@@ -253,7 +263,8 @@ object TimeSeriesUtils {
                         groundTruthColName: String,
                         scoresColName: String,
                         timeStampColName: String,
-                        nrOfAppliances: Int
+                        nrOfAppliances: Int,
+                        nrOfThresholds: Int
                       ) = {
 
     val thresholds: Array[Double] =
@@ -261,15 +272,23 @@ object TimeSeriesUtils {
         .select(scoresColName)
         .collect().map(_.getDouble(0).abs).sorted
 
+    println("number of available thresholds: " + thresholds.length.toString)
 
-    val hammingLosses: Array[Double] = thresholds.map(
-      threshold =>
+
+    val thresholdToTest: util.List[Double] = java.util.Arrays.asList(thresholds:_*)
+    Collections.shuffle(thresholdToTest)
+
+    val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleValue)(breakOut).toArray
+
+    val thresholdToTestSorted = thresholdToTestArray.take(nrOfThresholds).sorted
+
+    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
         evaluateHammingLoss(
           dfEdgeScores, dfGroundTruth,
           groundTruthColName, scoresColName,
           timeStampColName, nrOfAppliances, threshold)
     )
 
-    thresholds.zip(hammingLosses)
+    thresholdToTestSorted.zip(hammingLosses)
   }
 }

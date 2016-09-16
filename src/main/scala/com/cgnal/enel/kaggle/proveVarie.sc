@@ -14,22 +14,24 @@ val pippo = Map(("x",1),("y",2))
 
 val pappo = Map(("x",3),("y",4))
 
-
+import collection.JavaConverters._
+import scala.collection.breakOut
+import java.util
+import java.util.Collections
+import scala.collection._
 import scala.math.pow
 import scala.reflect.ClassTag
-
 val d = pow(5,2)
-
 val ori = "pippo"
 
 val ente = "\"pippo\""
-
-
 val papa = Map()
-
 val tinoni = List(1,2,5,6,7,8,1,-5,-3,12).toSeq.sorted
 
-def mario[Tuo:ClassTag](x: Int) = {
+val thresholds = Array(1,2,3,4)
+val thresholdToTest = java.util.Arrays.asList(thresholds:_*)
+Collections.shuffle(thresholdToTest)
 
+val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleValue)(breakOut).toArray
 
-}
+val thresholdToTestSorted = thresholdToTestArray.take(3).sorted

@@ -3,6 +3,7 @@ package com.cgnal.enel.kaggle.utils
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions.{avg,max,min}
+import org.apache.spark.sql.types.{LongType, IntegerType}
 
 
 /**
@@ -32,13 +33,13 @@ object Resampling {
     val idxBinTimeZero = 0
     val dfDownsampled = df.filter(((df("IDtime") - idxBinTimeZero) % downsamplingBinSize) === 0)
 
-    dfDownsampled.withColumn("IDtime", dfDownsampled("IDtime")/downsamplingBinSize)
+    dfDownsampled.withColumn("IDtime", (dfDownsampled.col("IDtime")/downsamplingBinSize).cast(IntegerType))
   }
 
 
   def edgeScoreDownsampling(df: DataFrame, selectedFeature: String, downsamplingBinSize: Int) = {
 
-    val dfIDscoreDownsampling = df.withColumn("IDscoreDownsampling", df("IDtime")/downsamplingBinSize)
+    val dfIDscoreDownsampling = df.withColumn("IDscoreDownsampling", (df.col("IDtime")/downsamplingBinSize).cast(IntegerType))
 
     val dfScoreDownsampled: DataFrame = dfIDscoreDownsampling.groupBy("IDscoreDownsampling")
       .agg(min(df("Timestamp")).as("TimestampPrediction"),
@@ -52,7 +53,6 @@ object Resampling {
     )
 
     dfFeatureEdgeScoreAppliancePrediction
-
   }
 
 

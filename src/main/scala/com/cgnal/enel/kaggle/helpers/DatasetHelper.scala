@@ -217,8 +217,6 @@ object DatasetHelper {
     val dfVI: DataFrame = dfV.join(dfI, "IDtime")
       .join(dfTS, "IDtime")
 
-    dfVI.printSchema()
-
     dfVI
   }
 

@@ -4,7 +4,6 @@ import java.nio.file.{Paths, Files}
 import java.security.Timestamp
 import java.util
 
-
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.utils.{ProvaUDAF, AverageOverReal, MSDwithRealFeature, AverageOverComplex}
 import org.apache.spark.broadcast.Broadcast
@@ -21,6 +20,7 @@ import scala.collection.Map
 import scala.reflect.ClassTag
 import com.databricks.spark.avro._
 
+import scala.reflect.io.Path
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -310,7 +310,7 @@ object EdgeDetection {
 
     val partitonLength = (dfFeatures.count().toDouble/partitionNumber.toDouble).round
 
-    val dfFeaturesIDpartition = dfFeatures.withColumn("IDpartition", dfFeatures("IDtime")/partitonLength)
+    val dfFeaturesIDpartition = dfFeatures.withColumn("IDpartition", (dfFeatures.col("IDtime")/partitonLength).cast(IntegerType))
 
     val dfFeaturesPartition = dfFeaturesIDpartition.repartition(partitionNumber, dfFeaturesIDpartition("IDpartition"))
 
@@ -318,8 +318,8 @@ object EdgeDetection {
 
     val RDDfeaturesEdgeScore: RDD[Row] = dfFeaturesSorted.mapPartitions((rows: Iterator[Row]) => {
       val windowList = rows.sliding(edgeWindowSize)
-      windowList.map({ (window: Seq[Row]) =>
-        val squareDistance: (Double, Double) = window.zipWithIndex.map{ el =>
+      val pippo: Iterator[Row] = windowList.map({ (window: Seq[Row]) =>
+        val squareDistance: (Double, Double) = window.zipWithIndex.map{ (el: (Row, Int)) =>
           val elFeatureValue = el._1.getAs[Double](selectedFeature)
           val squareDistanceOnEl = (elFeatureValue - OnSignature(el._2)) * (elFeatureValue - OnSignature(el._2))
           val squareDistanceOffEl = (elFeatureValue - OffSignature(el._2)) * (elFeatureValue - OffSignature(el._2))
@@ -329,6 +329,7 @@ object EdgeDetection {
         Row(window(timestepsNumberPreEdge).getAs[Int]("IDtime"), window(timestepsNumberPreEdge).getAs[Long]("Timestamp"),
         squareDistance._1, squareDistance._2)
       })
+      pippo
     })
 
     val edgeScoreSchema: StructType =
@@ -338,7 +339,7 @@ object EdgeDetection {
           StructField("msdON_Time_" + selectedFeature, DoubleType, false) ::
           StructField("msdOFF_Time_" + selectedFeature, DoubleType, false) :: Nil)
 
-    val dfFeaturesEdgeScore = sqlContext.createDataFrame(RDDfeaturesEdgeScore, edgeScoreSchema)
+    val dfFeaturesEdgeScore = sqlContext.createDataFrame(RDDfeaturesEdgeScore, edgeScoreSchema).cache()
 
 
     // NOT WORKING: YOU CANNOT USE AN UDAF WHEN MAKING AGGREGATION WITH A WINDOW FUNCTION
@@ -368,12 +369,14 @@ object EdgeDetection {
       max("msdON_Time_" + selectedFeature).as("max")).cache()
     val minOn = dfMinMaxOn.head.getAs[Double]("min")
     val maxOn = dfMinMaxOn.head.getAs[Double]("max")
+    dfMinMaxOn.unpersist()
 
     val dfMinMaxOff: DataFrame = dfFeaturesEdgeScore.agg(
       min("msdOFF_Time_" + selectedFeature).as("min"),
       max("msdOFF_Time_" + selectedFeature).as("max")).cache()
     val minOff = dfMinMaxOff.head.getAs[Double]("min")
     val maxOff = dfMinMaxOff.head.getAs[Double]("max")
+    dfMinMaxOff.unpersist()
 
     // Normalized edge score in [0,1]
     val dfFeaturesNormalizedEdgeScoreTemp = dfFeaturesEdgeScore.withColumn(
@@ -389,19 +392,19 @@ object EdgeDetection {
         - dfFeaturesNormalizedEdgeScoreTemp("nmsdOFF_Time_" + selectedFeature)
     )
 
+    dfFeaturesEdgeScore.unpersist()
+
     dfFeatureEdgeScoreAppliance
   }
 
 
   def computeStoreDfEdgeWindowsSingleFeature[SelFeatureType:ClassTag](dfFeatures: DataFrame,
+                                                                      dfTaggingInfo: DataFrame,
                                                                       filenameTaggingInfo: String, dfEdgeWindowsFilename: String,
                                                                       selectedFeature: String,
                                                                       timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long, edgeWindowSize: Int,
                                                                       sc: SparkContext, sqlContext: SQLContext) = {
 
-    val arrayTaggingInfo = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
-    val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
-      arrayTaggingInfo, DatasetHelper.TagSchema)
 
     val dfEdgeWindows = selectingEdgeWindowsFromTagWithTimeIntervalSingleFeature[SelFeatureType](dfFeatures, dfTaggingInfo,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
@@ -409,10 +412,9 @@ object EdgeDetection {
 
     val dfEdgeWindowsTaggingInfo: DataFrame = dfEdgeWindows.join(dfTaggingInfo, "IDedge")
 
-    dfEdgeWindowsTaggingInfo.printSchema()
-
-    if (Files.exists(Paths.get(dfEdgeWindowsFilename))) {
-      Files.delete(Paths.get(dfEdgeWindowsFilename))
+    val path: Path = Path (dfEdgeWindowsFilename)
+    if (path.exists) {
+      Try(path.deleteRecursively())
     }
     dfEdgeWindowsTaggingInfo.write
       .avro(dfEdgeWindowsFilename)
@@ -437,7 +439,7 @@ object EdgeDetection {
 
     val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
 
-    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename)
+    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
 
     val dfEdgeSignaturesAll =
       if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
@@ -464,6 +466,8 @@ object EdgeDetection {
         dfEdgeSignatures.printSchema()
         dfEdgeSignatures
       }
+
+    dfEdgeWindowsTaggingInfo.unpersist()
 
     val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
       .drop(dfAppliancesToPredict("Appliance"))
