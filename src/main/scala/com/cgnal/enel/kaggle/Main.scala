@@ -1,22 +1,23 @@
 package com.cgnal.enel.kaggle
 
-import java.nio.file.{Paths, Files}
+import java.nio.file.{Files, Paths}
 import java.util
 
 import com.cgnal.efm.predmain.uta.timeseries.TimeSeriesUtils
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.EdgeDetection.EdgeDetection
-import com.cgnal.enel.kaggle.utils.{Resampling, ProvaUDAF, AverageOverComplex, ComplexMap}
+import com.cgnal.enel.kaggle.utils.{AverageOverComplex, ComplexMap, ProvaUDAF, Resampling}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
+import java.io.{FileOutputStream, FileReader, ObjectOutputStream, StringReader}
 
-import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, SQLContext, Row}
+import org.apache.spark.sql.{Column, DataFrame, Row, SQLContext}
 import com.databricks.spark.avro._
+import org.apache.hadoop.hive.ql.udf.generic.GenericUDFLag
 import org.apache.spark.sql.hive.HiveContext
 
 import scala.collection.mutable
@@ -42,12 +43,16 @@ object Main {
     val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
     //val sqlContext = new SQLContext(sc)
-    val sqlContext = new HiveContext(sc)
+    val sqlContext: HiveContext = new HiveContext(sc)
     val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
 
     val data = Seq(
-      Row(1l,	-101d), Row(2l,	100d), Row(3l,	105d), Row(4l,	-100d),
-      Row(5l,	-90d), Row(6l,	-120d), Row(7l,	50d), Row(8l,	20d),
+      Row(1l,	-101d),
+      Row(2l,	100d),
+      Row(3l,	105d),
+      Row(4l,	-100d),
+      Row(5l,	-90d),
+      Row(6l,	-120d), Row(7l,	50d), Row(8l,	20d),
       Row(9l,	-20d), Row(10l,	-40d), Row(11l,	-50d), Row(12l,	30d),
       Row(13l,	-30d), Row(14l,	150d), Row(15l,	150d), Row(16l,	100d), Row(17l,	102d), Row(18l,	102d), Row(19l,	90d), Row(20l,	-70d),
       Row(21l,	-70d), Row(22l,	-70d),
@@ -65,22 +70,13 @@ object Main {
 
     //println(averagedDF.take(1)(2).getDouble(0))
     averagedDF.show()
-    println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
+    //println("blablabl4: " + averagedDF.take(1)(0).get(0))//.getDouble(0)
 
     val selectedFeature = "feature"
-    val timestampCol = "Timestamp"
+    val timestampCol = "Timestamp"   //"Timestamp"
 
-    val w: WindowSpec = Window
-      .orderBy(timestampCol)
-      .rangeBetween(0,1)
-
-    averagedDF
-      .withColumn(
-        timestampCol+"_FirstDifference",
-        lag(averagedDF.col(timestampCol),offset = 1) over w
-      )
-
-    averagedDF.show()
+    val prova = Resampling.firstDifference(averagedDF, selectedFeature, timestampCol)
+    prova.show()
 
   }
 
