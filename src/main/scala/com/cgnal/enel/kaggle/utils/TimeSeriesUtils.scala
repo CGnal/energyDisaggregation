@@ -4,6 +4,8 @@ package com.cgnal.efm.predmain.uta.timeseries
 import java.util
 import java.util.Collections
 
+import org.joda.time.DateTime
+
 import collection.JavaConverters._
 import scala.collection.breakOut
 
@@ -35,7 +37,7 @@ object TimeSeriesUtils {
                                  timeStampColName: String): DataFrame = {
 
     val w: WindowSpec = Window
-      .orderBy(timeStampColName)
+      .orderBy("IDscoreDownsampling")
       .rangeBetween(-1,1)
 
     val df2 = df
@@ -44,16 +46,17 @@ object TimeSeriesUtils {
         max(seriesColName).over(w))
       .withColumn(
         seriesColName + "_localAvg",
-        avg(seriesColName).over(w)).cache()
+        avg(seriesColName).over(w))
 
     val df3 = df2
-      .filter(df2(seriesColName) === df2(seriesColName + "_localMax")).cache()
+      .filter(df2(seriesColName) === df2(seriesColName + "_localMax"))
 
     val df4 = df3
       .filter(df3(seriesColName + "_localMax") !== df3(seriesColName + "_localAvg"))
       .select(timeStampColName, seriesColName)
 
     df4.filter(df4(seriesColName)>absoluteThreshold)
+
   }
 
   /***
@@ -72,7 +75,7 @@ object TimeSeriesUtils {
                                  timeStampColName: String): DataFrame = {
 
     val w = Window
-      .orderBy(timeStampColName)
+      .orderBy("IDscoreDownsampling")
       .rangeBetween(-1,1)
 
     val df2 = df
@@ -81,17 +84,14 @@ object TimeSeriesUtils {
         min(seriesColName).over(w))
       .withColumn(
         seriesColName + "_localAvg",
-        avg(seriesColName).over(w)).cache()
+        avg(seriesColName).over(w))
 
     val df3 = df2
-      .filter(df2(seriesColName) === df2(seriesColName + "_localMin")).cache()
+      .filter(df2(seriesColName) === df2(seriesColName + "_localMin"))
 
     val df4 = df3
       .filter(df3(seriesColName + "_localMin") !== df3(seriesColName + "_localAvg"))
       .select(timeStampColName, seriesColName)
-
-    df2.unpersist()
-    df3.unpersist()
 
     df4.filter(df4(seriesColName)<absoluteThreshold)
   }
@@ -236,7 +236,7 @@ object TimeSeriesUtils {
                            timeStampColName: String,
                            nrOfAppliances: Int,
                            threshold: Double
-                         ) = {
+                         ): Double = {
 
     println("evaluate HAMMING LOSS for appliance: " + nrOfAppliances.toString + " with threshold: " + threshold.toString)
 
@@ -252,20 +252,16 @@ object TimeSeriesUtils {
       predictionXORgroundTruth
         .agg(sum("XOR"))
 
-    val pippo = hammingLoss.head().getLong(0) / (dfGroundTruth.count() * nrOfAppliances).toDouble
+    val pippo: Double = hammingLoss.head().getLong(0) / (dfGroundTruth.count() * nrOfAppliances).toDouble
+
+    println("current hamming loss: " + pippo.toString)
 
     pippo
   }
 
-  def hammingLossCurve(
-                        dfEdgeScores: DataFrame,
-                        dfGroundTruth: DataFrame,
-                        groundTruthColName: String,
-                        scoresColName: String,
-                        timeStampColName: String,
-                        nrOfAppliances: Int,
-                        nrOfThresholds: Int
-                      ) = {
+  def extractingThreshold(dfEdgeScores: DataFrame,
+                          scoresColName: String,
+                          nrOfThresholds: Int) = {
 
     val thresholds: Array[Double] =
       dfEdgeScores
@@ -282,13 +278,7 @@ object TimeSeriesUtils {
 
     val thresholdToTestSorted = thresholdToTestArray.take(nrOfThresholds).sorted
 
-    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
-        evaluateHammingLoss(
-          dfEdgeScores, dfGroundTruth,
-          groundTruthColName, scoresColName,
-          timeStampColName, nrOfAppliances, threshold)
-    )
-
-    thresholdToTestSorted.zip(hammingLosses)
+    thresholdToTestSorted
   }
+
 }

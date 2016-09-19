@@ -121,7 +121,8 @@ object DatasetHelper {
     * @return
     */
   def fromArrayIndexedToDFTimestampOrFeatures(sc: SparkContext, sqlContext: SQLContext,
-                                              indexedTable: Array[(Array[String], Int)], schema: StructType, complexFlag: Int): DataFrame = {
+                                              indexedTable: Array[(Array[String], Int)], schema: StructType, complexFlag: Int,
+                                              timestampFactor: Double = 1E7): DataFrame = {
 
     val tableScala: Array[Row] = indexedTable.map{ line =>
       val rowString: Array[String] = line._1
@@ -138,7 +139,7 @@ object DatasetHelper {
         valuesOnRow
       }
       else {
-        val valuesOnRow: Array[Long] = rowString.map(x => (BigDecimal(x)*10E7).toLongExact)//(x.toDouble*(10E7)).round)
+        val valuesOnRow: Array[Long] = rowString.map(x => (BigDecimal(x)*timestampFactor).toLongExact)//(x.toDouble*(timestampFactor)).round)
         valuesOnRow
       }
 
@@ -153,7 +154,8 @@ object DatasetHelper {
 
 
   def fromArrayIndexedToDFTaggingInfo(sc: SparkContext, sqlContext: SQLContext,
-                                      indexedTable: Array[(Array[String], Int)], schema: StructType): DataFrame = {
+                                      indexedTable: Array[(Array[String], Int)], schema: StructType,
+                                      timestampFactor: Double = 1E7): DataFrame = {
 
     val tableScala: Array[Row] = indexedTable.map{ line =>
       val rowString: Array[String] = line._1
@@ -162,7 +164,7 @@ object DatasetHelper {
       if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
 
       val valuesOnRow: Array[Any] = Array(rowString(0).toInt, rowString(1).toString.replace("\"", ""),
-        (BigDecimal(rowString(2))*10E7).toLongExact, (BigDecimal(rowString(3))*10E7).toLongExact)
+        (BigDecimal(rowString(2))*timestampFactor).toLongExact, (BigDecimal(rowString(3))*timestampFactor).toLongExact)
 
       val IDandComplexKeys =  line._2 +: valuesOnRow
       Row(IDandComplexKeys: _* )

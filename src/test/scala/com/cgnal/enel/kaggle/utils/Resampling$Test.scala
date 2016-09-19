@@ -1,14 +1,12 @@
 package com.cgnal.enel.kaggle.utils
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
+import com.cgnal.enel.kaggle.utils.Resampling$Test._
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
-import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.{Row, SQLContext, DataFrame}
-import org.scalatest.{BeforeAndAfterEach, BeforeAndAfterAll, FunSuite}
-
-
-import Resampling$Test._
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.{SparkConf, SparkContext}
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuite}
 /**
   * Created by cavaste on 16/09/16.
   */
@@ -52,7 +50,7 @@ class Resampling$Test extends FunSuite with BeforeAndAfterAll with BeforeAndAfte
   test("check movingAverage"){
     val averagedDF: DataFrame =  Resampling.movingAverageReal(dataDF,
       "feature", 4,
-      TimeStamp_ColName = "Timestamp")
+      IDtime_ColName = "IDtime")
     //println(averagedDF.take(1)(2).getDouble(0))
     assert(averagedDF.take(1)(0).get(2) == 1.0)
     // assert(averagedDF.take(3)(2).getInt(0) === 2)

@@ -35,3 +35,5 @@ Collections.shuffle(thresholdToTest)
 val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleValue)(breakOut).toArray
 
 val thresholdToTestSorted = thresholdToTestArray.take(3).sorted
+
+0/3d

@@ -14,16 +14,22 @@ object Resampling {
   def movingAverageReal(df: DataFrame,
                         selectedFeature: String,
                         slidingWindowSize: Int,
-                        TimeStamp_ColName: String = "IDtime"): DataFrame ={
+                        IDtime_ColName: String = "IDtime"): DataFrame ={
 
     val w: WindowSpec = Window
-      .orderBy(TimeStamp_ColName)
+      .orderBy(IDtime_ColName)
       .rangeBetween(0,slidingWindowSize-1)
 
     val df2 = df
       .withColumn(
+        selectedFeature + "Original",
+        df(selectedFeature))
+
+    val df3 = df2
+      .withColumn(
         selectedFeature,
         avg(selectedFeature).over(w))
+
     df2
   }
 
@@ -56,7 +62,20 @@ object Resampling {
   }
 
 
+  //Given a feature and an ordering parameter, it computes the lagged difference
+  def firstDifference(df: DataFrame,
+                      selectedFeature: String,
+                      IDtime_ColName: String): DataFrame = {
 
+    // Lag() is not still implemented in Spark. We need to register a table and work with SQL queries !!!
+    df.registerTempTable("DFTABLE")
+    val tmp: DataFrame = df
+      .sqlContext
+      .sql("SELECT *, " +
+        selectedFeature + "- LAG(" + selectedFeature + ",1,0) OVER (ORDER BY " + IDtime_ColName + ") AS " + selectedFeature + "_FirstDiff " +
+        "FROM DFTABLE")
+    tmp
+  }
 
 
 }
