@@ -57,21 +57,18 @@ object Resampling {
 
   //########################################
 
-  //it computes at first the Lag, aftewrds the difference and finally it drops the Lagged column
+  //Given a feature and an ordering parameter, it computes the lagged difference
   def firstDifference(df: DataFrame,
-                        selectedFeature: String,
-                      timestampCol: String = "IDtime"): DataFrame = {
+                      selectedFeature: String,
+                      timestampCol: String): DataFrame = {
 
-    // Lag() is not still implemented in Spark. We need to register a table and work with SQL.
+    // Lag() is not still implemented in Spark. We need to register a table and work with SQL queries !!!
     df.registerTempTable("DFTABLE")
     val tmp: DataFrame = df
       .sqlContext
-      .sql("SELECT Timestamp, " +
-        "LAG(" + selectedFeature + ",1,0) OVER (ORDER BY " + timestampCol + ") AS Lagged," +
+      .sql("SELECT *, " +
         selectedFeature + "- LAG(" + selectedFeature + ",1,0) OVER (ORDER BY " + timestampCol + ") AS " + selectedFeature + "_FirstDiff " +
         "FROM DFTABLE")
-      .join(df, timestampCol)
-      .drop("Lagged")
     tmp
   }
 
