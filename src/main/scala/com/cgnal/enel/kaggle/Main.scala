@@ -36,7 +36,6 @@ object Main {
     mainTrue()
 
 //    mainFastCheck()
-
   }
 
   def mainTrue() = {
@@ -81,13 +80,37 @@ object Main {
     val filenameCSV_I = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
     val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
     val filenameTaggingInfo = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
+    val filenameDfFeatures = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfFeatures.csv"
 
-    val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
-      filenameTimestamp, filenameTaggingInfo,
-      sc, sqlContext)
+    val ingestionLabel = 0
 
-    val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
-    dfFeatures.printSchema()
+    val dfFeatures = if (ingestionLabel == 1) {
+      val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
+        filenameTimestamp, filenameTaggingInfo,
+        sc, sqlContext)
+      val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
+      dfFeatures.printSchema()
+
+      val path: Path = Path (filenameDfFeatures)
+      if (path.exists) {
+        Try(path.deleteRecursively())
+      }
+      dfFeatures.write
+        .format("com.databricks.spark.csv")
+        .option("header", "true")
+        .save(filenameDfFeatures)
+      dfFeatures
+    }
+    else {
+      sqlContext.read
+        .format("com.databricks.spark.csv")
+        .option("header", "true") // Use first line of all files as header
+        .option("inferSchema", "true")
+        .load(filenameDfFeatures)
+    }
+
+
+
     println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
     println("2. RESAMPLING")
@@ -106,16 +129,21 @@ object Main {
     val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
       arrayTaggingInfo, DatasetHelper.TagSchema)
 
-    println("3a Selecting edge windows for a given feature")
-/*    EdgeDetection.computeStoreDfEdgeWindowsSingleFeature[SelFeatureType](dfFeatureEdgeDetection,
+    println("3a Cross-validation")
+
+    
+
+    println("3b Selecting edge windows for a given feature")
+    //TODO: VALIDATION SET
+    EdgeDetection.computeStoreDfEdgeWindowsSingleFeature[SelFeatureType](dfFeatureEdgeDetection,
       dfTaggingInfo,
       filenameTaggingInfo, filenameDfEdgeWindowsFeature,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
       sc, sqlContext)
-*/
+
 
     // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
-    println("3b. COMPUTING EDGE SIGNATURE of a single Feature")
+    println("3c. COMPUTING EDGE SIGNATURE of a single Feature")
     val filenameSampleSubmission = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/SampleSubmission.csv"
     val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliances[SelFeatureType](filenameDfEdgeWindowsFeature,
       edgeWindowSize, selectedFeature, classOf[SelFeatureType],
@@ -160,7 +188,7 @@ object Main {
 
     println("6. THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED")
     dateTime = DateTime.now()
-    //TODO: VALIDATION SET
+
     val nrOfThresholds = 10
     val nrOfAppliances = 1
 
