@@ -43,9 +43,9 @@ object Main {
     val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
     //    val sqlContext = new SQLContext(sc)
+    val sqlContext = new HiveContext(sc)
     val rootLogger = Logger.getRootLogger()
     rootLogger.setLevel(Level.ERROR)
-    val sqlContext = new HiveContext(sc)
 
     val selectedFeature = "RealPowerFund"
     val partitionNumber = 4
@@ -145,7 +145,7 @@ object Main {
     // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
     println("3c. COMPUTING EDGE SIGNATURE of a single Feature")
     val filenameSampleSubmission = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/SampleSubmission.csv"
-    val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliances[SelFeatureType](filenameDfEdgeWindowsFeature,
+    val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](filenameDfEdgeWindowsFeature,
       edgeWindowSize, selectedFeature, classOf[SelFeatureType],
       filenameSampleSubmission,
       sc, sqlContext)
@@ -259,7 +259,7 @@ object Main {
 
     println("3b. COMPUTING EDGE SIGNATURE of a single Feature")
     val (dfEdgeSignatures, dfAppliancesToPredict) =
-      computeEdgeSignatureAppliancesWithStD[SelFeatureType](
+      EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](
         filenameDfEdgeWindowsFeature,
         edgeWindowSize, selectedFeature, classOf[SelFeatureType],
         filenameSampleSubmission, sc, sqlContext)
@@ -276,58 +276,6 @@ object Main {
   ///#########################################################
   ///#########################################################
   // type SelFeatureType = Double
-  def computeEdgeSignatureAppliancesWithStD[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
-                                                                     selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
-                                                                     filenameSampleSubmission: String,
-                                                                     sc: SparkContext, sqlContext: SQLContext) = {
-
-
-    if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
-      sys.error("Selected Feature Type must be Double or Map[String,Double]")
-
-    val dfSampleSubmission = sqlContext.read
-      .format("com.databricks.spark.csv")
-      .option("header", "true") // Use first line of all files as header
-      .option("inferSchema", "true") // Automatically infer data types
-      .load(filenameSampleSubmission)
-
-    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
-
-    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
-
-    val dfEdgeSignaturesAll =
-      if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
-        // define UDAF
-        val averageOverComplexON = new AverageOverComplex("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
-        val averageOverComplexOFF = new AverageOverComplex("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
-
-        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
-          averageOverComplexON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
-          averageOverComplexOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
-
-        dfEdgeSignatures.printSchema()
-        dfEdgeSignatures
-      }
-      else {
-
-        val averageOverRealON = new AverageOverReal("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
-        val averageOverRealOFF = new AverageOverReal("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
-
-        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
-          averageOverRealON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
-          averageOverRealOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
-
-        dfEdgeSignatures.printSchema()
-        dfEdgeSignatures
-      }
-
-    dfEdgeWindowsTaggingInfo.unpersist()
-
-    val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
-      .drop(dfAppliancesToPredict("Appliance"))
-
-    (dfEdgeSignatures, dfAppliancesToPredict)
-  }
   ///#########################################################
   ///#########################################################
   ///#########################################################

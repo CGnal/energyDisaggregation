@@ -37,3 +37,14 @@ val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleVa
 val thresholdToTestSorted = thresholdToTestArray.take(3).sorted
 
 0/3d
+
+
+
+val buffer0Array: Array[Double] = Array(1.1,2.2,3.3,4.4)
+val buffer1Array = Array(10.0,11.1,12.2,13.3)
+//accoppia i  2 arrays
+val xZipY: Array[(Double, Double)] = buffer0Array.zip(buffer1Array)
+xZipY(1)
+
+
+//xZipY.map(el => el._1 + el._2)
