@@ -6,7 +6,7 @@ import java.util
 import com.cgnal.efm.predmain.uta.timeseries.TimeSeriesUtils
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.EdgeDetection.EdgeDetection
-import com.cgnal.enel.kaggle.utils.{Resampling, ProvaUDAF, AverageOverComplex, ComplexMap}
+import com.cgnal.enel.kaggle.utils._//{Resampling, myUDAFs,ProvaUDAF, AverageOverComplex, ComplexMap}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
@@ -33,12 +33,12 @@ import scala.util.{Failure, Success, Try}
 object Main {
   def main(args: Array[String]) = {
 
-    mainTrue()
+//    mainTrue(args)
 
-//    mainFastCheck()
+    mainFastCheck()
   }
 
-  def mainTrue() = {
+  def mainTrue(args: Array[String]) = {
 
     val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
@@ -220,55 +220,25 @@ object Main {
   }
 
 
-
-
-
-
-
-
   def mainFastCheck(): Unit = {
 
-
-    val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
+    val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
-    //    val sqlContext = new SQLContext(sc)
-    val rootLogger = Logger.getRootLogger()
-    rootLogger.setLevel(Level.ERROR)
-    val sqlContext = new HiveContext(sc)
-
+    //val sqlContext = new SQLContext(sc)
+    val sqlContext: HiveContext = new HiveContext(sc)
+    val filenameCSV = "/Users/aagostinelli/Desktop/EnergyDisaggregation/codeGitHub/ExampleForCodeTest/testV.csv"
 
     val data = Seq(
       Row(1l,	-101d),
       Row(2l,	100d),
-      Row(3l,	105d),  //
+      Row(3l,	105d),
       Row(4l,	-100d),
       Row(5l,	-90d),
-      Row(6l,	-120d),//
-      Row(7l,	50d),//
-      Row(8l,	20d),
-      Row(9l,	-20d),
-      Row(10l,	-40d),
-      Row(11l,	-50d), //
-      Row(12l,	30d),
-      Row(13l,	-30d),
-      Row(14l,	150d),//
-      Row(15l,	150d),
-      Row(16l,	100d),
-      Row(17l,	102d),
-      Row(18l,	102d),
-      Row(19l,	90d),
-      Row(20l,	-70d),//
-      Row(21l,	-70d),
-      Row(22l,	-70d),
-      Row(23l,	-60d),
-      Row(24l,	50d),//
-      Row(25l,	20d),
-      Row(26l,	-20d),
-      Row(27l,	-30d),//
-      Row(28l,	-30d) ,
-      Row(29l,	10d),//
-      Row(30l,	10d),
-      Row(31l,	-30d)//
+      Row(6l,	-120d), Row(7l,	50d), Row(8l,	20d),
+      Row(9l,	-20d), Row(10l,	-40d), Row(11l,	-50d), Row(12l,	30d),
+      Row(13l,	-30d), Row(14l,	150d), Row(15l,	150d), Row(16l,	100d), Row(17l,	102d), Row(18l,	102d), Row(19l,	90d), Row(20l,	-70d),
+      Row(21l,	-70d), Row(22l,	-70d),
+      Row(23l,	-60d), Row(24l,	50d), Row(25l,	20d), Row(26l,	-20d), Row(27l,	-30d), Row(28l,	-30d) , Row(29l,	10d), Row(30l,	10d), Row(31l,	-30d)//
     )
 
     val schema: StructType =
@@ -276,15 +246,92 @@ object Main {
         StructField("Timestamp", LongType, false) ::
           StructField("feature", DoubleType, false) :: Nil)
     val dataDF: DataFrame = sqlContext.createDataFrame(sc.makeRDD(data), schema)
-    dataDF.printSchema()
 
-    val averagedDF: DataFrame =  Resampling.movingAverageReal(dataDF,selectedFeature="feature",slidingWindowSize=3,
-      "IDtime")
-    //println(averagedDF.take(1)(2).getDouble(0))
-    averagedDF.show()
-    println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
+    // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
+    type SelFeatureType = Double
+    val filenameDfEdgeWindowsFeature = "/Users/aagostinelli/Desktop/EnergyDisaggregation/shortSparkTest/dfEdgeWindowsApplianceProva.csv"
+    val filenameSampleSubmission = "/Users/aagostinelli/Desktop/EnergyDisaggregation/SampleSubmission.csv"
+
+    val timestepsNumberPreEdge = 4 // number of points in the interval
+    val timestepsNumberPostEdge = 7 // number of points in the interval
+    val edgeWindowSize = timestepsNumberPreEdge + timestepsNumberPostEdge + 1
+    val selectedFeature = "RealPowerFund"
+
+    println("3b. COMPUTING EDGE SIGNATURE of a single Feature")
+    val (dfEdgeSignatures, dfAppliancesToPredict) =
+      computeEdgeSignatureAppliancesWithStD[SelFeatureType](
+        filenameDfEdgeWindowsFeature,
+        edgeWindowSize, selectedFeature, classOf[SelFeatureType],
+        filenameSampleSubmission, sc, sqlContext)
+
+    dfEdgeSignatures.cache()
+    dfAppliancesToPredict.cache()
+    dfEdgeSignatures.show()
+    dfAppliancesToPredict.show()
+
 
   }
+  ///#########################################################
+  ///#########################################################
+  ///#########################################################
+  ///#########################################################
+  // type SelFeatureType = Double
+  def computeEdgeSignatureAppliancesWithStD[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
+                                                                     selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
+                                                                     filenameSampleSubmission: String,
+                                                                     sc: SparkContext, sqlContext: SQLContext) = {
+
+
+    if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
+      sys.error("Selected Feature Type must be Double or Map[String,Double]")
+
+    val dfSampleSubmission = sqlContext.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true") // Use first line of all files as header
+      .option("inferSchema", "true") // Automatically infer data types
+      .load(filenameSampleSubmission)
+
+    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
+
+    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
+
+    val dfEdgeSignaturesAll =
+      if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
+        // define UDAF
+        val averageOverComplexON = new AverageOverComplex("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
+        val averageOverComplexOFF = new AverageOverComplex("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
+
+        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
+          averageOverComplexON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
+          averageOverComplexOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
+
+        dfEdgeSignatures.printSchema()
+        dfEdgeSignatures
+      }
+      else {
+
+        val averageOverRealON = new AverageOverReal("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
+        val averageOverRealOFF = new AverageOverReal("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
+
+        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
+          averageOverRealON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
+          averageOverRealOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
+
+        dfEdgeSignatures.printSchema()
+        dfEdgeSignatures
+      }
+
+    dfEdgeWindowsTaggingInfo.unpersist()
+
+    val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
+      .drop(dfAppliancesToPredict("Appliance"))
+
+    (dfEdgeSignatures, dfAppliancesToPredict)
+  }
+  ///#########################################################
+  ///#########################################################
+  ///#########################################################
+  //#########################################################
 
 
 }
