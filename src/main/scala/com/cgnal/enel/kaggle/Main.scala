@@ -161,81 +161,80 @@ object Main {
 
     println("4. COMPUTING EDGE SIMILARITY for a single appliance")
     dateTime = DateTime.now()
-    // TODO loop su appliances
-    val applianceID = 30
+
 
     val appliances: Array[Int] = dfEdgeSignatures.select("ApplianceID").collect()
       .map(row => row.getAs[Int]("ApplianceID"))
 
 
-    //    appliances.map { (applianceID: Int) =>
+    val thresholdHLarray: Array[Array[(SelFeatureType, SelFeatureType)]] =
+      appliances.map { (applianceID: Int) =>
 
-    val OnSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
-      .head.getAs[mutable.WrappedArray[SelFeatureType]]("ON_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
+      val OnSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
+        .head.getAs[mutable.WrappedArray[SelFeatureType]]("ON_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
 
-    val OffSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
-      .head.getAs[mutable.WrappedArray[SelFeatureType]]("OFF_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
+      val OffSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
+        .head.getAs[mutable.WrappedArray[SelFeatureType]]("OFF_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
 
-    val dfRealFeatureEdgeScoreAppliance = EdgeDetection.computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeatureEdgeDetection,
-      selectedFeature,
-      OnSignature, OffSignature,
-      timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
-      sc, sqlContext).cache()
+      val dfRealFeatureEdgeScoreAppliance = EdgeDetection.computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeatureEdgeDetection,
+        selectedFeature,
+        OnSignature, OffSignature,
+        timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
+        sc, sqlContext).cache()
 
-    println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
-
-
-
-
-    println("5 RESAMPLING SIMILARITY SCORES")
-    dateTime = DateTime.now()
-    val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
-      selectedFeature, downsamplingBinPredictionSize).cache()
-
-    dfRealFeatureEdgeScoreAppliance.unpersist()
-
-    println("Time for RESAMPLING SIMILARITY SCORES: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+      println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
 
 
-    println("6. THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED")
-    dateTime = DateTime.now()
+      println("5 RESAMPLING SIMILARITY SCORES")
+      dateTime = DateTime.now()
+      val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
+        selectedFeature, downsamplingBinPredictionSize).cache()
 
-    val nrOfThresholds = 10
+      dfRealFeatureEdgeScoreAppliance.unpersist()
 
-    println("6a add ground truth prediction")
-    val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
-      .filter(dfTaggingInfo("applianceID") === applianceID)
-      .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
-
-    val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
-      "TimestampPrediction", "GroundTruth").cache()
-
-    println("6b selecting threshold to test")
-    val thresholdToTestSorted: Array[SelFeatureType] = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
-      "DeltaScorePrediction_" + selectedFeature,
-      nrOfThresholds)
-
-    //    val thresholdToTestSorted = Array(0d)
-
-    println("6c computing hamming loss for each threshold")
-    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
-      TimeSeriesUtils.evaluateHammingLoss(
-        dfRealFeatureEdgeScoreApplianceDS,
-        dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-        "TimestampPrediction", applianceID, threshold, onOffOutputDirName)
-    )
-
-    val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
-
-    println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+      println("Time for RESAMPLING SIMILARITY SCORES: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-    HLoverThreshold.foreach(x => println(x._1, x._2))
+
+
+      println("6. THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED")
+      dateTime = DateTime.now()
+
+      val nrOfThresholds = 2
+
+      println("6a add ground truth prediction")
+      val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
+        .filter(dfTaggingInfo("applianceID") === applianceID)
+        .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
+
+      val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
+        "TimestampPrediction", "GroundTruth").cache()
+
+      println("6b selecting threshold to test")
+      val thresholdToTestSorted: Array[SelFeatureType] = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
+        "DeltaScorePrediction_" + selectedFeature,
+        nrOfThresholds)
+
+      //    val thresholdToTestSorted = Array(0d)
+
+      println("6c computing hamming loss for each threshold")
+      val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
+        TimeSeriesUtils.evaluateHammingLoss(
+          dfRealFeatureEdgeScoreApplianceDS,
+          dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
+          "TimestampPrediction", applianceID, threshold, onOffOutputDirName)
+      )
+
+      val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
+      println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+      HLoverThreshold.foreach(x => println(x._1, x._2))
+      HLoverThreshold
+    }
 
   }
-
 
 }
 

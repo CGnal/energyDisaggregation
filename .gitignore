@@ -60,7 +60,3 @@ metastore_db/**
 
 *.iml
 .idea
-
-src/main/scala/com/cgnal/enel/kaggle/MainFake.scala
-
-
