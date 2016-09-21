@@ -208,6 +208,9 @@ object TimeSeriesUtils {
 
     val outputFilename = onOffOutputDirName + "appliance" + applianceID.toString + "_threshold" + threshold.toInt.toString + "_OnOffArray.csv"
 
+
+
+
     val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
       timeStampColName, "prediction")
 

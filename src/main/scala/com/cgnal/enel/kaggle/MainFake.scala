@@ -70,6 +70,11 @@ object MainFake {
     averagedDF.show()
     println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
 
+
+    val appliances: Array[Int] = dfEdgeSignatures.select("ApplianceID").collect()
+      .map(row => row.getAs[Int]("ApplianceID"))
+
+
   }
 
 

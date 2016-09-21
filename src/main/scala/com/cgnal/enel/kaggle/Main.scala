@@ -66,18 +66,23 @@ object Main {
 
     type SelFeatureType = Double
 
-    val filenameDfEdgeWindowsFeature = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv"
+    val filenameDfEdgeWindowsFeature = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv"
 
 
     println("1. INGESTION (from csv to DataFrame)")
     var dateTime = DateTime.now()
     // TODO inserire ciclo su HOUSE e su GIORNI
-    val filenameCSV_V = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
-    val filenameCSV_I = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
-    val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
-    val filenameTaggingInfo = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
-    val filenameDfFeatures = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfFeatures.csv"
-    val onOffOutputDirName = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/"
+    val filenameCSV_V = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
+    val filenameCSV_I = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
+    val filenameTimestamp = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
+    val filenameTaggingInfo = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
+    val filenameDfFeatures = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/dfFeatures.csv"
+    ///////////
+    ///##### writing output
+    // Trigger OnOff tables per appliances, per threshold
+    /////
+    val outputDirName = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/"
+    val edgeVarOutputFileName = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/onoff_EdgeSignatureWithVar.csv"
 
 
     val ingestionLabel = 0
@@ -152,13 +157,20 @@ object Main {
 
     dfEdgeSignatures.cache()
     //  dfAppliancesToPredict.cache()
+    val path: Path = Path (edgeVarOutputFileName)
+    if (path.exists) {
+      Try(path.deleteRecursively())
+    }
+    dfEdgeSignatures.write
+      .format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save(edgeVarOutputFileName)
+
 
     println("Time for EDGE DETECTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-
-
-
+   // --------------> Loop over appliances
     println("4. COMPUTING EDGE SIMILARITY for a single appliance")
     dateTime = DateTime.now()
 
@@ -166,8 +178,8 @@ object Main {
     val appliances: Array[Int] = dfEdgeSignatures.select("ApplianceID").collect()
       .map(row => row.getAs[Int]("ApplianceID"))
 
-
-    val thresholdHLarray: Array[Array[(SelFeatureType, SelFeatureType)]] =
+    //Array esterno appliance, Array interno threshold
+    val resultsOverAppliances: Array[(Int, String, Array[(SelFeatureType, SelFeatureType)])] =
       appliances.map { (applianceID: Int) =>
 
       val OnSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
@@ -182,15 +194,32 @@ object Main {
         timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
         sc, sqlContext).cache()
 
+        var writingOutput = outputDirName+"ScoreNoDS"+"_AppID"+applianceID+".csv"
+        val path2: Path = Path (writingOutput)
+        if (path2.exists) {
+          Try(path2.deleteRecursively())
+        }
+        dfRealFeatureEdgeScoreAppliance.write
+          .format("com.databricks.spark.csv")
+          .option("header", "true")
+          .save(writingOutput)
+
       println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
-
-
-
 
       println("5 RESAMPLING SIMILARITY SCORES")
       dateTime = DateTime.now()
       val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
         selectedFeature, downsamplingBinPredictionSize).cache()
+
+        writingOutput = outputDirName+"ScoreDS"+"_AppID"+applianceID+".csv"
+        val path: Path = Path (writingOutput)
+        if (path.exists) {
+          Try(path.deleteRecursively())
+        }
+        dfRealFeatureEdgeScoreApplianceDS.write
+          .format("com.databricks.spark.csv")
+          .option("header", "true")
+          .save(writingOutput)
 
       dfRealFeatureEdgeScoreAppliance.unpersist()
 
@@ -224,15 +253,24 @@ object Main {
         TimeSeriesUtils.evaluateHammingLoss(
           dfRealFeatureEdgeScoreApplianceDS,
           dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-          "TimestampPrediction", applianceID, threshold, onOffOutputDirName)
+          "TimestampPrediction", applianceID, threshold, outputDirName)
       )
 
       val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
       println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
-
+      // array con thor e haming loss
       HLoverThreshold.foreach(x => println(x._1, x._2))
-      HLoverThreshold
+
+        val applianceName = dfTaggingInfo.filter(dfTaggingInfo("applianceID") === applianceID).head.getAs[String]("ApplianceName")
+
+        (applianceID, applianceName, HLoverThreshold)
     }
+
+    //save temp object
+    val temp = resultsOverAppliances.toList
+    val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "resultsOverAppliances.dat"))
+    store.writeObject(temp)
+    store.close()
 
   }
 
