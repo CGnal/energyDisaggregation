@@ -196,7 +196,8 @@ object TimeSeriesUtils {
                            scoresColName: String,
                            timeStampColName: String,
                            applianceID: Int,
-                           threshold: Double
+                           threshold: Double,
+                           onOffOutputDirName: String
                          ): Double = {
 
     println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with threshold: " + threshold.toString)
@@ -204,6 +205,8 @@ object TimeSeriesUtils {
     val onOffWindows: Array[(Long, Long)] =
       findOnOffIntervals(
         dfEdgeScores, threshold, scoresColName, timeStampColName)
+
+    val outputFilename = onOffOutputDirName + "appliance" + applianceID.toString + "_threshold" + threshold.toInt.toString + "_OnOffArray.csv"
 
     val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
       timeStampColName, "prediction")

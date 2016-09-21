@@ -77,6 +77,8 @@ object Main {
     val filenameTimestamp = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
     val filenameTaggingInfo = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
     val filenameDfFeatures = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/dfFeatures.csv"
+    val onOffOutputDirName = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/CSV_OUT/Tagged_Training_07_27_1343372401/"
+
 
     val ingestionLabel = 0
 
@@ -222,7 +224,7 @@ object Main {
       TimeSeriesUtils.evaluateHammingLoss(
         dfRealFeatureEdgeScoreApplianceDS,
         dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-        "TimestampPrediction", applianceID, threshold)
+        "TimestampPrediction", applianceID, threshold, onOffOutputDirName)
     )
 
     val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
