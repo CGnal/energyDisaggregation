@@ -5,7 +5,7 @@ import java.security.Timestamp
 import java.util
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
-import com.cgnal.enel.kaggle.utils.{ProvaUDAF, AverageOverReal, MSDwithRealFeature, AverageOverComplex}
+import com.cgnal.enel.kaggle.utils._
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.expressions.{WindowSpec, Window}
@@ -318,7 +318,7 @@ object EdgeDetection {
     val dfFeaturesSorted = dfFeaturesPartition.sortWithinPartitions("IDtime").cache()
 
     val RDDfeaturesEdgeScore: RDD[Row] = dfFeaturesSorted.mapPartitions((rows: Iterator[Row]) => {
-      val windowList = rows.sliding(edgeWindowSize)
+      val windowList: rows.GroupedIterator[Row] = rows.sliding(edgeWindowSize)
       val pippo: Iterator[Row] = windowList.map({ (window: Seq[Row]) =>
         val squareDistance: (Double, Double) = window.zipWithIndex.map{ (el: (Row, Int)) =>
           val elFeatureValue = el._1.getAs[Double](selectedFeature)
@@ -478,11 +478,11 @@ object EdgeDetection {
 
 
 
-  def computeStoreEdgeSignatureWithVarAppliances[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
-                                                                          selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
-                                                                          filenameSampleSubmission: String,
-                                                                          sc: SparkContext, sqlContext: SQLContext,
-                                                                          storingFlag: Boolean = true): (SchemaRDD, SchemaRDD) = {
+  def computeEdgeSignatureAppliancesWithVar[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
+                                                                     selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
+                                                                     filenameSampleSubmission: String,
+                                                                     sc: SparkContext, sqlContext: SQLContext) = {
+
 
     if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
       sys.error("Selected Feature Type must be Double or Map[String,Double]")
@@ -496,7 +496,7 @@ object EdgeDetection {
     val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
 
     val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
-
+    // TODO : implementation of the Variance OVer Complex
     val dfEdgeSignaturesAll =
       if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
         // define UDAF
@@ -510,17 +510,48 @@ object EdgeDetection {
         dfEdgeSignatures.printSchema()
         dfEdgeSignatures
       }
-      else {
+      else{
 
         val averageOverRealON = new AverageOverReal("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
         val averageOverRealOFF = new AverageOverReal("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
 
-        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo.groupBy("ApplianceID").agg(
-          averageOverRealON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
-          averageOverRealOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
+        val varianceOverRealON = new VarianceOverReal("ON_TimeWindow_" + selectedFeature,"ON_TimeSignature_" + selectedFeature ,edgeWindowSize)
+        val varianceOverRealOFF = new VarianceOverReal("OFF_TimeWindow_" + selectedFeature, "OFF_TimeSignature_" + selectedFeature, edgeWindowSize)
+        dfEdgeWindowsTaggingInfo.printSchema()
+        dfEdgeWindowsTaggingInfo.show()
 
+
+        val dfEdgeSignatures: DataFrame = dfEdgeWindowsTaggingInfo
+          .groupBy("ApplianceID")
+          .agg(
+            averageOverRealON(dfEdgeWindowsTaggingInfo.col("ON_TimeWindow_" + selectedFeature)).as("ON_TimeSignature_" + selectedFeature),
+            averageOverRealOFF(dfEdgeWindowsTaggingInfo.col("OFF_TimeWindow_" + selectedFeature)).as("OFF_TimeSignature_" + selectedFeature))
+
+        println("printing schema dfEdgeSignatures: ")
         dfEdgeSignatures.printSchema()
-        dfEdgeSignatures
+        println("showing schema dfEdgeSignatures: ")
+        dfEdgeSignatures.show()
+
+        val tmp :DataFrame = dfEdgeWindowsTaggingInfo.join(dfEdgeSignatures, "ApplianceID")
+        val dfEdgeSignaturesVar: DataFrame = tmp
+          .groupBy("ApplianceID")
+          .agg(
+            varianceOverRealON(
+              (tmp.col("ON_TimeWindow_" + selectedFeature)),
+              (tmp.col("ON_TimeSignature_" + selectedFeature))
+            ).as("ON_TimeSignatureVariance_" + selectedFeature),
+            varianceOverRealOFF(
+              (tmp.col("OFF_TimeWindow_" + selectedFeature)),
+              (tmp.col("OFF_TimeSignature_" + selectedFeature)))
+              .as("OFF_TimeSignatureVariance_" + selectedFeature)
+          )
+
+        println("printing schema dfEdgeSignaturesVar: ")
+        dfEdgeSignaturesVar.printSchema()
+        println("showing  dfEdgeSignaturesVar: ")
+        dfEdgeSignaturesVar.show()
+        val finalDF: DataFrame = dfEdgeSignatures.join(dfEdgeSignaturesVar,"ApplianceID")
+        finalDF
       }
 
     dfEdgeWindowsTaggingInfo.unpersist()

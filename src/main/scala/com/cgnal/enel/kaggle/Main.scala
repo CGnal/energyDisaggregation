@@ -6,14 +6,14 @@ import java.util
 import com.cgnal.efm.predmain.uta.timeseries.TimeSeriesUtils
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.EdgeDetection.EdgeDetection
-import com.cgnal.enel.kaggle.utils.{Resampling, ProvaUDAF, AverageOverComplex, ComplexMap}
+import com.cgnal.enel.kaggle.utils._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 
 import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
-import org.apache.spark.sql.functions._
+
 import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import com.databricks.spark.avro._
@@ -31,14 +31,10 @@ import scala.util.{Failure, Success, Try}
 
 
 object Main {
+
+
   def main(args: Array[String]) = {
 
-    mainTrue()
-
-//    mainFastCheck()
-  }
-
-  def mainTrue() = {
 
     val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
     val sc = new SparkContext(conf)
@@ -86,7 +82,7 @@ object Main {
 
     val dfFeatures = if (ingestionLabel == 1) {
       val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
-        filenameTimestamp, filenameTaggingInfo,
+        filenameTimestamp,
         sc, sqlContext)
       val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
       dfFeatures.printSchema()
@@ -113,6 +109,8 @@ object Main {
 
     println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
+
+
     println("2. RESAMPLING")
     dateTime = DateTime.now()
     val dfFeatureSmoothed = Resampling.movingAverageReal(dfFeatures, selectedFeature, averageSmoothingWindowSize)
@@ -123,43 +121,52 @@ object Main {
     println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
+
+
+
     println("3. EDGE DETECTION ALGORITHM")
     dateTime = DateTime.now()
-    val arrayTaggingInfo = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
+    val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
     val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
       arrayTaggingInfo, DatasetHelper.TagSchema)
 
     println("3a Cross-validation")
-
-    
+    val (dfTaggingInfoTrain, dfTaggingInfoTest) = CrossValidation.validationSplit(dfTaggingInfo, sqlContext)
 
     println("3b Selecting edge windows for a given feature")
-    //TODO: VALIDATION SET
     EdgeDetection.computeStoreDfEdgeWindowsSingleFeature[SelFeatureType](dfFeatureEdgeDetection,
-      dfTaggingInfo,
+      dfTaggingInfoTrain,
       filenameTaggingInfo, filenameDfEdgeWindowsFeature,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
       sc, sqlContext)
 
-
     // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
     println("3c. COMPUTING EDGE SIGNATURE of a single Feature")
     val filenameSampleSubmission = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/SampleSubmission.csv"
-    val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliances[SelFeatureType](filenameDfEdgeWindowsFeature,
+    val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](filenameDfEdgeWindowsFeature,
       edgeWindowSize, selectedFeature, classOf[SelFeatureType],
       filenameSampleSubmission,
       sc, sqlContext)
 
     dfEdgeSignatures.cache()
-  //  dfAppliancesToPredict.cache()
+    //  dfAppliancesToPredict.cache()
 
     println("Time for EDGE DETECTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+
+
 
 
     println("4. COMPUTING EDGE SIMILARITY for a single appliance")
     dateTime = DateTime.now()
     // TODO loop su appliances
     val applianceID = 30
+
+    val appliances: Array[Int] = dfEdgeSignatures.select("ApplianceID").collect()
+      .map(row => row.getAs[Int]("ApplianceID"))
+
+
+    //    appliances.map { (applianceID: Int) =>
 
     val OnSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
       .head.getAs[mutable.WrappedArray[SelFeatureType]]("ON_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
@@ -176,115 +183,61 @@ object Main {
     println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
+
+
     println("5 RESAMPLING SIMILARITY SCORES")
     dateTime = DateTime.now()
     val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
       selectedFeature, downsamplingBinPredictionSize).cache()
 
-   dfRealFeatureEdgeScoreAppliance.unpersist()
+    dfRealFeatureEdgeScoreAppliance.unpersist()
 
     println("Time for RESAMPLING SIMILARITY SCORES: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+
 
 
     println("6. THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED")
     dateTime = DateTime.now()
 
     val nrOfThresholds = 10
-    val nrOfAppliances = 1
 
     println("6a add ground truth prediction")
-    val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffRangesToDF(dfRealFeatureEdgeScoreApplianceDS, "TimestampPrediction",
-      dfTaggingInfo, applianceID, "applianceID", "ON_Time", "OFF_Time", "GroundTruth").cache()
+    val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
+      .filter(dfTaggingInfo("applianceID") === applianceID)
+      .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
+
+    val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
+      "TimestampPrediction", "GroundTruth").cache()
 
     println("6b selecting threshold to test")
-    val thresholdToTestSorted = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
+    val thresholdToTestSorted: Array[SelFeatureType] = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
       "DeltaScorePrediction_" + selectedFeature,
       nrOfThresholds)
 
-//    val thresholdToTestSorted = Array(0d)
+    //    val thresholdToTestSorted = Array(0d)
 
     println("6c computing hamming loss for each threshold")
     val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
       TimeSeriesUtils.evaluateHammingLoss(
         dfRealFeatureEdgeScoreApplianceDS,
         dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-        "TimestampPrediction", nrOfAppliances, threshold)
+        "TimestampPrediction", applianceID, threshold)
     )
 
-    val HLoverThreshold = thresholdToTestSorted.zip(hammingLosses)
+    val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
 
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
     HLoverThreshold.foreach(x => println(x._1, x._2))
-  }
-
-
-
-
-
-
-
-
-  def mainFastCheck(): Unit = {
-
-
-    val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
-    val sc = new SparkContext(conf)
-    //    val sqlContext = new SQLContext(sc)
-    val rootLogger = Logger.getRootLogger()
-    rootLogger.setLevel(Level.ERROR)
-    val sqlContext = new HiveContext(sc)
-
-
-    val data = Seq(
-      Row(1l,	-101d),
-      Row(2l,	100d),
-      Row(3l,	105d),  //
-      Row(4l,	-100d),
-      Row(5l,	-90d),
-      Row(6l,	-120d),//
-      Row(7l,	50d),//
-      Row(8l,	20d),
-      Row(9l,	-20d),
-      Row(10l,	-40d),
-      Row(11l,	-50d), //
-      Row(12l,	30d),
-      Row(13l,	-30d),
-      Row(14l,	150d),//
-      Row(15l,	150d),
-      Row(16l,	100d),
-      Row(17l,	102d),
-      Row(18l,	102d),
-      Row(19l,	90d),
-      Row(20l,	-70d),//
-      Row(21l,	-70d),
-      Row(22l,	-70d),
-      Row(23l,	-60d),
-      Row(24l,	50d),//
-      Row(25l,	20d),
-      Row(26l,	-20d),
-      Row(27l,	-30d),//
-      Row(28l,	-30d) ,
-      Row(29l,	10d),//
-      Row(30l,	10d),
-      Row(31l,	-30d)//
-    )
-
-    val schema: StructType =
-      StructType(
-        StructField("Timestamp", LongType, false) ::
-          StructField("feature", DoubleType, false) :: Nil)
-    val dataDF: DataFrame = sqlContext.createDataFrame(sc.makeRDD(data), schema)
-    dataDF.printSchema()
-
-    val averagedDF: DataFrame =  Resampling.movingAverageReal(dataDF,selectedFeature="feature",slidingWindowSize=3,
-      "IDtime")
-    //println(averagedDF.take(1)(2).getDouble(0))
-    averagedDF.show()
-    println("blablabl4: " + averagedDF.take(1)(0).get(2))//.getDouble(0)
 
   }
 
 
 }
+
+
+
+
+

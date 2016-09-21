@@ -54,7 +54,7 @@ object DatasetHelper {
 
   val TSschema: StructType =
     StructType(StructField("IDtime", IntegerType, false) ::
-    StructField("Timestamp", LongType, false) :: Nil)
+      StructField("Timestamp", LongType, false) :: Nil)
 
   val TagSchema: StructType =
     StructType(
@@ -99,7 +99,7 @@ object DatasetHelper {
       val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
 
       val complexKeys: Array[Map[String, Double]] = (
-        for (i <- 0 until complexNumber) yield Map(("re",rowComplexSplitDouble(2*i)), ("im", rowComplexSplitDouble(2*i+1)))
+        for (i <- 0 until complexNumber) yield Map(("re", rowComplexSplitDouble(2 * i)), ("im", rowComplexSplitDouble(2 * i + 1)))
         ).toArray
 
       Row(complexKeys: _*)
@@ -124,11 +124,11 @@ object DatasetHelper {
                                               indexedTable: Array[(Array[String], Int)], schema: StructType, complexFlag: Int,
                                               timestampFactor: Double = 1E7): DataFrame = {
 
-    val tableScala: Array[Row] = indexedTable.map{ line =>
+    val tableScala: Array[Row] = indexedTable.map { line =>
       val rowString: Array[String] = line._1
       val rowLength = rowString.length
 
-      if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
+      if (rowLength != schema.length - 1) sys.error("schema length is not equal to the number of columns found in the CSV")
       val valuesOnRow = if (complexFlag == 1) {
         val rowComplexSplit: Array[String] = rowString.flatMap((complex: String) => complex.split("((?=(?<=\\d)(\\-|\\+))|[i])"))
         val rowComplexSplitDouble: Array[Double] = rowComplexSplit.map(x => x.toDouble)
@@ -139,12 +139,12 @@ object DatasetHelper {
         valuesOnRow
       }
       else {
-        val valuesOnRow: Array[Long] = rowString.map(x => (BigDecimal(x)*timestampFactor).toLongExact)//(x.toDouble*(timestampFactor)).round)
+        val valuesOnRow: Array[Long] = rowString.map(x => (BigDecimal(x) * timestampFactor).toLongExact) //(x.toDouble*(timestampFactor)).round)
         valuesOnRow
       }
 
-      val IDandComplexKeys =  line._2 +: valuesOnRow
-      Row(IDandComplexKeys: _* )
+      val IDandComplexKeys = line._2 +: valuesOnRow
+      Row(IDandComplexKeys: _*)
     }
 
     val tableRDD = sc.parallelize(tableScala)
@@ -157,17 +157,17 @@ object DatasetHelper {
                                       indexedTable: Array[(Array[String], Int)], schema: StructType,
                                       timestampFactor: Double = 1E7): DataFrame = {
 
-    val tableScala: Array[Row] = indexedTable.map{ line =>
+    val tableScala: Array[Row] = indexedTable.map { line =>
       val rowString: Array[String] = line._1
       val rowLength = rowString.length
 
-      if (rowLength != schema.length-1) sys.error("schema length is not equal to the number of columns found in the CSV")
+      if (rowLength != schema.length - 1) sys.error("schema length is not equal to the number of columns found in the CSV")
 
       val valuesOnRow: Array[Any] = Array(rowString(0).toInt, rowString(1).toString.replace("\"", ""),
-        (BigDecimal(rowString(2))*timestampFactor).toLongExact, (BigDecimal(rowString(3))*timestampFactor).toLongExact)
+        (BigDecimal(rowString(2)) * timestampFactor).toLongExact, (BigDecimal(rowString(3)) * timestampFactor).toLongExact)
 
-      val IDandComplexKeys =  line._2 +: valuesOnRow
-      Row(IDandComplexKeys: _* )
+      val IDandComplexKeys = line._2 +: valuesOnRow
+      Row(IDandComplexKeys: _*)
     }
 
     val tableRDD = sc.parallelize(tableScala)
@@ -200,7 +200,7 @@ object DatasetHelper {
 
 
   def importingDatasetToDfHouseDay(filenameCSV_V: String, filenameCSV_I: String,
-                                   filenameTimestamp: String, filenameTaggingInfo: String,
+                                   filenameTimestamp: String,
                                    sc: SparkContext, sqlContext: SQLContext): DataFrame = {
 
     val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V)
@@ -237,6 +237,7 @@ object DatasetHelper {
 
     dfFeaturesPower
   }
+
 
 
 /*  def fromCSVsampleSubmissiomToDF(sc: SparkContext, sqlContext: SQLContext,

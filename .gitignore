@@ -56,9 +56,11 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 
-metastore_db/*
+metastore_db/**
 
 *.iml
 .idea
+
+src/main/scala/com/cgnal/enel/kaggle/MainFake.scala
 
 

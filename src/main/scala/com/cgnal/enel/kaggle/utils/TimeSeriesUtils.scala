@@ -162,60 +162,21 @@ object TimeSeriesUtils {
     }
   }
 
-  private def buildPrediction(dfEdgeScores: DataFrame,
-                              absoluteThreshold: Double,
-                              valuesColName: String,
-                              timeStampColName: String): DataFrame = {
-    val onOffWindows: Array[(Long, Long)] =
-      findOnOffIntervals(
-        dfEdgeScores, absoluteThreshold, valuesColName, timeStampColName)
 
-    val firstTwoRows = dfEdgeScores.sort(timeStampColName).select(timeStampColName).take(2)
-
-    val firstRow = firstTwoRows.head
-    val secondRow = firstTwoRows.last
-
-    val step = secondRow.getLong(0) - firstRow.getLong(0)
-    val predictionRanges: Array[Long] =
-      onOffWindows.flatMap(tuple => tuple._1 to tuple._2 by step)
-
-
-    val predictionRangesBC =
-      dfEdgeScores.sqlContext.sparkContext
-        .broadcast[Array[Long]](predictionRanges)
-
-    //build prediction
-    val df = dfEdgeScores
-      .withColumn("prediction",
-        dfEdgeScores(timeStampColName)
-          .isin(predictionRangesBC.value:_*).cast(IntegerType))
-
-    df.select(timeStampColName, "prediction")
-  }
-
-
-  def addOnOffRangesToDF(
+  def addOnOffStatusToDF(
                           df: DataFrame,
+                          onOffWindows: Array[(Long, Long)],
                           timeStampColName: String,
-                          dfOnOffWindows: DataFrame,
-                          applianceId: Int,
-                          applianceIdColName: String,
-                          onColName: String,
-                          offColName: String,
-                          newColName: String) = {
+                          newColName: String): DataFrame = {
 
-    val onOffWindows: Array[(Long, Long)] = dfOnOffWindows
-      .filter(dfOnOffWindows(applianceIdColName) === applianceId)
-      .select(onColName, offColName).map(r => (r.getLong(0), r.getLong(1))).collect()
-
-    val firstTwoRows = df.sort(timeStampColName).select(timeStampColName).take(2)
-
-    val firstRow = firstTwoRows.head
-    val secondRow = firstTwoRows.last
-
-    val step = secondRow.getLong(0) - firstRow.getLong(0)
     val predictionRanges: Array[Long] =
-      onOffWindows.flatMap(tuple => tuple._1 to tuple._2 by step)
+      onOffWindows.flatMap(tuple => {
+        df.filter(df(timeStampColName) >= tuple._1 && df(timeStampColName) <= tuple._2).select(timeStampColName)
+          .collect()
+          .map(rowTime => {
+            rowTime.getAs[Long](timeStampColName)
+          })
+      })
 
     val predictionRangesBC =
       df.sqlContext.sparkContext
@@ -234,14 +195,18 @@ object TimeSeriesUtils {
                            groundTruthColName: String,
                            scoresColName: String,
                            timeStampColName: String,
-                           nrOfAppliances: Int,
+                           applianceID: Int,
                            threshold: Double
                          ): Double = {
 
-    println("evaluate HAMMING LOSS for appliance: " + nrOfAppliances.toString + " with threshold: " + threshold.toString)
+    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with threshold: " + threshold.toString)
 
-    val predictionsDf: DataFrame = buildPrediction(
-      dfEdgeScores, threshold, scoresColName, timeStampColName)
+    val onOffWindows: Array[(Long, Long)] =
+      findOnOffIntervals(
+        dfEdgeScores, threshold, scoresColName, timeStampColName)
+
+    val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
+      timeStampColName, "prediction")
 
     val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer")
 
@@ -252,16 +217,17 @@ object TimeSeriesUtils {
       predictionXORgroundTruth
         .agg(sum("XOR"))
 
-    val pippo: Double = hammingLoss.head().getLong(0) / (dfGroundTruth.count() * nrOfAppliances).toDouble
+    val pippo: Double = hammingLoss.head().getLong(0) / dfGroundTruth.count().toDouble
 
     println("current hamming loss: " + pippo.toString)
 
     pippo
   }
 
+
   def extractingThreshold(dfEdgeScores: DataFrame,
                           scoresColName: String,
-                          nrOfThresholds: Int) = {
+                          nrOfThresholds: Int): Array[Double] = {
 
     val thresholds: Array[Double] =
       dfEdgeScores
@@ -276,7 +242,7 @@ object TimeSeriesUtils {
 
     val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleValue)(breakOut).toArray
 
-    val thresholdToTestSorted = thresholdToTestArray.take(nrOfThresholds).sorted
+    val thresholdToTestSorted: Array[Double] = thresholdToTestArray.take(nrOfThresholds).sorted
 
     thresholdToTestSorted
   }
