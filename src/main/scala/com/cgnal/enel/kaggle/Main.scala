@@ -223,6 +223,8 @@ object Main {
   def mainFastCheck(): Unit = {
 
     val conf  = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
+    //val rootLogger = Logger.getRootLogger()
+    //rootLogger.setLevel(Level.ERROR)
     val sc = new SparkContext(conf)
     //val sqlContext = new SQLContext(sc)
     val sqlContext: HiveContext = new HiveContext(sc)
@@ -268,6 +270,18 @@ object Main {
     dfAppliancesToPredict.cache()
     dfEdgeSignatures.show()
     dfAppliancesToPredict.show()
+
+    val filenameDfFeatures = "/Users/aagostinelli/Desktop/EnergyDisaggregation/shortSparkTest/dfEdgeSignatures.csv"
+
+    val path: Path = Path (filenameDfFeatures)
+    if (path.exists) {
+      Try(path.deleteRecursively())
+    }
+
+    dfEdgeSignatures.write
+      .format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save(filenameDfFeatures)
 
 
   }
