@@ -10,6 +10,7 @@ import com.cgnal.enel.kaggle.utils._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
+import org.apache.spark.sql.functions.first
 
 import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
@@ -72,6 +73,7 @@ object Main {
     println("1. INGESTION (from csv to DataFrame)")
     var dateTime = DateTime.now()
     // TODO inserire ciclo su HOUSE e su GIORNI
+
     val filenameSampleSubmission = "/Users/aagostinelli/Desktop/EnergyDisaggregation/SampleSubmission.csv"
     val filenameCSV_V = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
     val filenameCSV_I = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
@@ -86,7 +88,8 @@ object Main {
     val edgeVarOutputFileName = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/onoff_EdgeSignatureWithVar.csv"
 
 
-    val ingestionLabel = 1
+    val ingestionLabel = 0
+
 
     val dfFeatures = if (ingestionLabel == 1) {
       val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
@@ -172,27 +175,29 @@ object Main {
     dateTime = DateTime.now()
 
 
-    val appliances: Array[Int] = dfEdgeSignatures.select("ApplianceID").collect()
-      .map(row => row.getAs[Int]("ApplianceID"))
+    val appliancesTrain: Array[Int] = dfTaggingInfoTrain.groupBy("ApplianceID").agg(first("ApplianceID").as("ApplianceIDtrain"))
+      .select("ApplianceIDtrain").map(row => row.getAs[Int](0)).collect()
+
 
     //Array esterno appliance, Array interno threshold
     val resultsOverAppliances: Array[(Int, String, Array[(SelFeatureType, SelFeatureType)])] =
-      appliances.map { (applianceID: Int) =>
+      appliancesTrain.map { (applianceID: Int) =>
 
-      val OnSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
-        .head.getAs[mutable.WrappedArray[SelFeatureType]]("ON_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
 
-      val OffSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
-        .head.getAs[mutable.WrappedArray[SelFeatureType]]("OFF_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
+        val OnSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
+          .head.getAs[mutable.WrappedArray[SelFeatureType]]("ON_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
 
-      val dfRealFeatureEdgeScoreAppliance = EdgeDetection.computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeatureEdgeDetection,
-        selectedFeature,
-        OnSignature, OffSignature,
-        timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
-        sc, sqlContext).cache()
+        val OffSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
+          .head.getAs[mutable.WrappedArray[SelFeatureType]]("OFF_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
 
-        var writingOutput = outputDirName+"ScoreNoDS"+"_AppID"+applianceID.toString+".csv"
-        val path2: Path = Path (writingOutput)
+        val dfRealFeatureEdgeScoreAppliance = EdgeDetection.computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeatureEdgeDetection,
+          selectedFeature,
+          OnSignature, OffSignature,
+          timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
+          sc, sqlContext).cache()
+
+        var writingOutput = outputDirName + "ScoreNoDS" + "_AppID" + applianceID.toString + ".csv"
+        val path2: Path = Path(writingOutput)
         if (path2.exists) {
           Try(path2.deleteRecursively())
         }
@@ -201,15 +206,20 @@ object Main {
           .option("header", "true")
           .save(writingOutput)
 
-      println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+        println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
-      println("5 RESAMPLING SIMILARITY SCORES")
-      dateTime = DateTime.now()
-      val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
-        selectedFeature, downsamplingBinPredictionSize).cache()
 
-        writingOutput = outputDirName+"ScoreDS"+"_AppID"+applianceID.toString+".csv"
-        val path: Path = Path (writingOutput)
+        println("5 RESAMPLING SIMILARITY SCORES")
+        dateTime = DateTime.now()
+        val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
+          selectedFeature, downsamplingBinPredictionSize).cache()
+
+        dfRealFeatureEdgeScoreAppliance.unpersist()
+
+        println("Time for RESAMPLING SIMILARITY SCORES: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+        writingOutput = outputDirName + "ScoreDS" + "_AppID" + applianceID.toString + ".csv"
+        val path: Path = Path(writingOutput)
         if (path.exists) {
           Try(path.deleteRecursively())
         }
@@ -218,51 +228,48 @@ object Main {
           .option("header", "true")
           .save(writingOutput)
 
-      dfRealFeatureEdgeScoreAppliance.unpersist()
-
-      println("Time for RESAMPLING SIMILARITY SCORES: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+        dfRealFeatureEdgeScoreAppliance.unpersist()
 
 
 
+        println("6. THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED")
+        dateTime = DateTime.now()
 
-      println("6. THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED")
-      dateTime = DateTime.now()
+        val nrOfThresholds = 2
 
-      val nrOfThresholds = 2
+        println("6a add ground truth prediction")
+        val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
+          .filter(dfTaggingInfo("applianceID") === applianceID)
+          .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
 
-      println("6a add ground truth prediction")
-      val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
-        .filter(dfTaggingInfo("applianceID") === applianceID)
-        .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
+        val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
+          "TimestampPrediction", "GroundTruth").cache()
 
-      val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
-        "TimestampPrediction", "GroundTruth").cache()
+        println("6b selecting threshold to test")
+        val thresholdToTestSorted: Array[SelFeatureType] = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
+          "DeltaScorePrediction_" + selectedFeature,
+          nrOfThresholds)
 
-      println("6b selecting threshold to test")
-      val thresholdToTestSorted: Array[SelFeatureType] = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
-        "DeltaScorePrediction_" + selectedFeature,
-        nrOfThresholds)
 
-      //    val thresholdToTestSorted = Array(0d)
+        println("6c computing hamming loss for each threshold")
+        val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
+          TimeSeriesUtils.evaluateHammingLoss(
+            dfRealFeatureEdgeScoreApplianceDS,
+            dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
+            "TimestampPrediction", applianceID, threshold, outputDirName)
+        )
 
-      println("6c computing hamming loss for each threshold")
-      val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
-        TimeSeriesUtils.evaluateHammingLoss(
-          dfRealFeatureEdgeScoreApplianceDS,
-          dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-          "TimestampPrediction", applianceID, threshold, outputDirName)
-      )
+        val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
+        println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
-      val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
-      println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
-      // array con thor e haming loss
-      HLoverThreshold.foreach(x => println(x._1, x._2))
+
+
+        HLoverThreshold.foreach(x => println(x._1, x._2))
 
         val applianceName = dfTaggingInfo.filter(dfTaggingInfo("applianceID") === applianceID).head.getAs[String]("ApplianceName")
 
         (applianceID, applianceName, HLoverThreshold)
-    }
-
+      }
     //save temp object
     val temp = resultsOverAppliances.toList
     val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "resultsOverAppliances.dat"))
