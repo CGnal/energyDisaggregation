@@ -2,10 +2,9 @@ package com.cgnal.enel.kaggle
 
 import java.nio.file.{Paths, Files}
 import java.util
-
-import com.cgnal.efm.predmain.uta.timeseries.TimeSeriesUtils
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.EdgeDetection.EdgeDetection
+import com.cgnal.enel.kaggle.models.edgeDetection.SimilarityScore
 import com.cgnal.enel.kaggle.utils._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
@@ -240,18 +239,18 @@ object Main {
           .filter(dfTaggingInfo("applianceID") === applianceID)
           .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
 
-        val dfGroundTruth: DataFrame = TimeSeriesUtils.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
+        val dfGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
           "TimestampPrediction", "GroundTruth").cache()
 
         println("6b selecting threshold to test")
-        val thresholdToTestSorted: Array[SelFeatureType] = TimeSeriesUtils.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
+        val thresholdToTestSorted: Array[SelFeatureType] = SimilarityScore.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
           "DeltaScorePrediction_" + selectedFeature,
           nrOfThresholds)
 
 
         println("6c computing hamming loss for each threshold")
         val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
-          TimeSeriesUtils.evaluateHammingLoss(
+          HammingLoss.evaluateHammingLoss(
             dfRealFeatureEdgeScoreApplianceDS,
             dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
             "TimestampPrediction", applianceID, threshold, outputDirName)
@@ -273,6 +272,10 @@ object Main {
     val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "resultsOverAppliances.dat"))
     store.writeObject(temp)
     store.close()
+
+
+    val bestResultOverAppliances =
+      HammingLoss.extractingHLoverThresholdAndAppliances(outputDirName + "resultsOverAppliances.dat")
 
   }
 

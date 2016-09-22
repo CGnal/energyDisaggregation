@@ -1,6 +1,6 @@
 package com.cgnal.enel.kaggle.utils
 
-import com.cgnal.efm.predmain.uta.timeseries.TimeSeriesUtils
+
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
@@ -108,7 +108,7 @@ class TimeSeriesUtils$Test extends FunSuite with BeforeAndAfterAll with BeforeAn
 
   test("Hamming Loss") {
 
-    val res = TimeSeriesUtils.evaluateHammingLoss(
+    val res = HammingLoss.evaluateHammingLoss(
       df,
       dfGT, "isOn", "feature", "timeStamp", 1, 15, "prova")
 

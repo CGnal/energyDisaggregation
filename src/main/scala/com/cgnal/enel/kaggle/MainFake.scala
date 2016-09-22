@@ -2,10 +2,9 @@ package com.cgnal.enel.kaggle
 
 import java.nio.file.{Paths, Files}
 import java.util
-
-import com.cgnal.efm.predmain.uta.timeseries.TimeSeriesUtils
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.models.EdgeDetection.EdgeDetection
+import com.cgnal.enel.kaggle.models.edgeDetection.SimilarityScore
 import com.cgnal.enel.kaggle.utils._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf

@@ -1,30 +1,23 @@
-package com.cgnal.efm.predmain.uta.timeseries
+package com.cgnal.enel.kaggle.models.edgeDetection
 
-
-import java.io.{FileOutputStream, ObjectOutputStream}
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Collections
 
-import org.joda.time.DateTime
-
-import collection.JavaConverters._
-import scala.collection.breakOut
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions.{avg, max, min, sum}
 import org.apache.spark.sql.types.IntegerType
 
+import scala.collection.JavaConverters._
+import scala.collection.breakOut
 import scala.collection.mutable.ArrayBuffer
-import scala.io.Source
-import scala.reflect.io.Path
-import scala.util.Try
-import java.nio.file.{Paths, Files}
-import java.nio.charset.StandardCharsets
 
 /**
   * Created by riccardo.satta on 12/09/16.
   */
-object TimeSeriesUtils {
+object SimilarityScore {
 
   /***
     * Finds positive peaks on a timeSeries (implements the homonym in Matlab)
@@ -102,7 +95,7 @@ object TimeSeriesUtils {
   }
 
 
-  private def findOnOffIntervals(
+  def findOnOffIntervals(
                                   dfEdgeScores: DataFrame,
                                   absoluteThreshold: Double,
                                   valuesColName: String,
@@ -168,73 +161,8 @@ object TimeSeriesUtils {
   }
 
 
-  def addOnOffStatusToDF(
-                          df: DataFrame,
-                          onOffWindows: Array[(Long, Long)],
-                          timeStampColName: String,
-                          newColName: String): DataFrame = {
-
-    val predictionRanges: Array[Long] =
-      onOffWindows.flatMap(tuple => {
-        df.filter(df(timeStampColName) >= tuple._1 && df(timeStampColName) <= tuple._2).select(timeStampColName)
-          .collect()
-          .map(rowTime => {
-            rowTime.getAs[Long](timeStampColName)
-          })
-      })
-
-    val predictionRangesBC =
-      df.sqlContext.sparkContext
-        .broadcast[Array[Long]](predictionRanges)
-
-    //build prediction
-    df.withColumn(newColName,
-      df(timeStampColName)
-        .isin(predictionRangesBC.value:_*).cast(IntegerType))
-  }
 
 
-  def evaluateHammingLoss(
-                           dfEdgeScores: DataFrame,
-                           dfGroundTruth: DataFrame,
-                           groundTruthColName: String,
-                           scoresColName: String,
-                           timeStampColName: String,
-                           applianceID: Int,
-                           threshold: Double,
-                           onOffOutputDirName: String
-                         ): Double = {
-
-    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with threshold: " + threshold.toString)
-
-    val onOffWindows: Array[(Long, Long)] =
-      findOnOffIntervals(
-        dfEdgeScores, threshold, scoresColName, timeStampColName)
-
-    val outputFilename = onOffOutputDirName+"OnOffArray" + "_AppID" + applianceID.toString + "_threshold" + threshold.toInt.toString +".txt"
-
-    val stringOnOff: String = onOffWindows.mkString("\n")
-    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
-
-
-    val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
-      timeStampColName, "prediction")
-
-    val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer")
-
-    val predictionXORgroundTruth =
-      df.withColumn("XOR", (df(groundTruthColName) !== df("prediction")).cast(IntegerType))
-
-    val hammingLoss =
-      predictionXORgroundTruth
-        .agg(sum("XOR"))
-
-    val pippo: Double = hammingLoss.head().getLong(0) / dfGroundTruth.count().toDouble
-
-    println("current hamming loss: " + pippo.toString)
-
-    pippo
-  }
 
 
   def extractingThreshold(dfEdgeScores: DataFrame,
