@@ -72,6 +72,7 @@ object Main {
     println("1. INGESTION (from csv to DataFrame)")
     var dateTime = DateTime.now()
     // TODO inserire ciclo su HOUSE e su GIORNI
+    val filenameSampleSubmission = "/Users/aagostinelli/Desktop/EnergyDisaggregation/SampleSubmission.csv"
     val filenameCSV_V = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
     val filenameCSV_I = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
     val filenameTimestamp = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
@@ -85,7 +86,7 @@ object Main {
     val edgeVarOutputFileName = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/onoff_EdgeSignatureWithVar.csv"
 
 
-    val ingestionLabel = 0
+    val ingestionLabel = 1
 
     val dfFeatures = if (ingestionLabel == 1) {
       val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
@@ -128,9 +129,6 @@ object Main {
     println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-
-
-
     println("3. EDGE DETECTION ALGORITHM")
     dateTime = DateTime.now()
     val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
@@ -149,7 +147,6 @@ object Main {
 
     // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
     println("3c. COMPUTING EDGE SIGNATURE of a single Feature")
-    val filenameSampleSubmission = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/SampleSubmission.csv"
     val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](filenameDfEdgeWindowsFeature,
       edgeWindowSize, selectedFeature, classOf[SelFeatureType],
       filenameSampleSubmission,
@@ -194,7 +191,7 @@ object Main {
         timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
         sc, sqlContext).cache()
 
-        var writingOutput = outputDirName+"ScoreNoDS"+"_AppID"+applianceID+".csv"
+        var writingOutput = outputDirName+"ScoreNoDS"+"_AppID"+applianceID.toString+".csv"
         val path2: Path = Path (writingOutput)
         if (path2.exists) {
           Try(path2.deleteRecursively())
@@ -211,7 +208,7 @@ object Main {
       val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
         selectedFeature, downsamplingBinPredictionSize).cache()
 
-        writingOutput = outputDirName+"ScoreDS"+"_AppID"+applianceID+".csv"
+        writingOutput = outputDirName+"ScoreDS"+"_AppID"+applianceID.toString+".csv"
         val path: Path = Path (writingOutput)
         if (path.exists) {
           Try(path.deleteRecursively())
