@@ -5,6 +5,6 @@ package com.cgnal.enel.kaggle.models.edgeDetection
   */
 object Performance {
 
-  def extractingHLoverThresholdandAppliances
+//  def extractingHLoverThresholdandAppliances
 
 }

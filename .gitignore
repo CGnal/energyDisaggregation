@@ -57,6 +57,8 @@ buildNumber.properties
 .mvn/timing.properties
 
 src/main/scala/com/cgnal/enel/kaggle/MainFake.scala
+src/main/scala/com/cgnal/enel/kaggle/utils/ReferencePath.scala
+
 
 metastore_db/**
 

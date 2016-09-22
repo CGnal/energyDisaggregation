@@ -67,26 +67,24 @@ object Main {
 
     type SelFeatureType = Double
 
-    val filenameDfEdgeWindowsFeature = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/dfEdgeWindowsApplianceProva.csv"
+    val filenameDfEdgeWindowsFeature = ReferencePath.filenameDfEdgeWindowsFeature
 
 
     println("1. INGESTION (from csv to DataFrame)")
     var dateTime = DateTime.now()
     // TODO inserire ciclo su HOUSE e su GIORNI
-
-    val filenameSampleSubmission = "/Users/aagostinelli/Desktop/EnergyDisaggregation/SampleSubmission.csv"
-    val filenameCSV_V = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1V.csv"
-    val filenameCSV_I = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/LF1I.csv"
-    val filenameTimestamp = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/TimeTicks1.csv"
-    val filenameTaggingInfo = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/TaggingInfo.csv"
-    val filenameDfFeatures = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/dfFeatures.csv"
+    val filenameSampleSubmission = ReferencePath.filenameSampleSubmission
+    val filenameCSV_V = ReferencePath.filenameCSV_V
+    val filenameCSV_I = ReferencePath.filenameCSV_I
+    val filenameTimestamp = ReferencePath.filenameTimestamp
+    val filenameTaggingInfo = ReferencePath.filenameTaggingInfo
+    val filenameDfFeatures = ReferencePath.filenameDfFeatures
     ///////////
     ///##### writing output
     // Trigger OnOff tables per appliances, per threshold
     /////
-    val outputDirName = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/"
-    val edgeVarOutputFileName = "/Users/aagostinelli/Desktop/EnergyDisaggregation/CSV_OUT/Tagged_Training_07_27_1343372401/onoff_EdgeSignatureWithVar.csv"
-
+    val outputDirName = ReferencePath.outputDirName
+    val edgeVarOutputFileName = ReferencePath.edgeVarOutputFileName
 
     val ingestionLabel = 0
 
@@ -170,7 +168,7 @@ object Main {
     println("Time for EDGE DETECTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-   // --------------> Loop over appliances
+
     println("4. COMPUTING EDGE SIMILARITY for a single appliance")
     dateTime = DateTime.now()
 
