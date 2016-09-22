@@ -129,6 +129,26 @@ object Main {
     println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
+
+
+
+
+
+    val dfSampleSubmission = sqlContext.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true") // Use first line of all files as header
+      .option("inferSchema", "true") // Automatically infer data types
+      .load(filenameSampleSubmission)
+
+    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
+
+
+
+
+
+
+
+
     println("3. EDGE DETECTION ALGORITHM")
     dateTime = DateTime.now()
     val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
@@ -147,13 +167,14 @@ object Main {
 
     // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
     println("3c. COMPUTING EDGE SIGNATURE of a single Feature")
-    val (dfEdgeSignatures, dfAppliancesToPredict) = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](filenameDfEdgeWindowsFeature,
+    val dfEdgeSignatures = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](filenameDfEdgeWindowsFeature,
       edgeWindowSize, selectedFeature, classOf[SelFeatureType],
       filenameSampleSubmission,
       sc, sqlContext)
 
     dfEdgeSignatures.cache()
-    //  dfAppliancesToPredict.cache()
+
+
     val path: Path = Path (edgeVarOutputFileName)
     if (path.exists) {
       Try(path.deleteRecursively())
@@ -224,8 +245,6 @@ object Main {
           .format("com.databricks.spark.csv")
           .option("header", "true")
           .save(writingOutput)
-
-        dfRealFeatureEdgeScoreAppliance.unpersist()
 
 
 

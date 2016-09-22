@@ -6,7 +6,7 @@ import scala.io.Source
 /**
   * Created by cavaste on 21/09/16.
   */
-object CSVUtils {
+object CSVutils {
 
   def Juxtappose(
                   fileNameCSV1: String,

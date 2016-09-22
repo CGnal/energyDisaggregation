@@ -478,13 +478,14 @@ object EdgeDetection {
 
 
 
-  def computeEdgeSignatureAppliancesWithVar[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
+  def computeEdgeSignatureAppliancesWithVar[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String,
+                                                                     edgeWindowSize: Int,
                                                                      selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
                                                                      filenameSampleSubmission: String,
                                                                      sc: SparkContext, sqlContext: SQLContext) = {
 
 
-    if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
+    if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String, Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
       sys.error("Selected Feature Type must be Double or Map[String,Double]")
 
     val dfSampleSubmission = sqlContext.read
@@ -498,7 +499,7 @@ object EdgeDetection {
     val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
     // TODO : implementation of the Variance OVer Complex
     val dfEdgeSignaturesAll =
-      if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
+      if (selectedFeatureType.isAssignableFrom(classOf[Map[String, Double]])) {
         // define UDAF
         val averageOverComplexON = new AverageOverComplex("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
         val averageOverComplexOFF = new AverageOverComplex("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
@@ -510,12 +511,12 @@ object EdgeDetection {
         dfEdgeSignatures.printSchema()
         dfEdgeSignatures
       }
-      else{
+      else {
 
         val averageOverRealON = new AverageOverReal("ON_TimeWindow_" + selectedFeature, edgeWindowSize)
         val averageOverRealOFF = new AverageOverReal("OFF_TimeWindow_" + selectedFeature, edgeWindowSize)
 
-        val varianceOverRealON = new VarianceOverReal("ON_TimeWindow_" + selectedFeature,"ON_TimeSignature_" + selectedFeature ,edgeWindowSize)
+        val varianceOverRealON = new VarianceOverReal("ON_TimeWindow_" + selectedFeature, "ON_TimeSignature_" + selectedFeature, edgeWindowSize)
         val varianceOverRealOFF = new VarianceOverReal("OFF_TimeWindow_" + selectedFeature, "OFF_TimeSignature_" + selectedFeature, edgeWindowSize)
         dfEdgeWindowsTaggingInfo.printSchema()
         dfEdgeWindowsTaggingInfo.show()
@@ -532,7 +533,7 @@ object EdgeDetection {
         println("showing schema dfEdgeSignatures: ")
         dfEdgeSignatures.show()
 
-        val tmp :DataFrame = dfEdgeWindowsTaggingInfo.join(dfEdgeSignatures, "ApplianceID")
+        val tmp: DataFrame = dfEdgeWindowsTaggingInfo.join(dfEdgeSignatures, "ApplianceID")
         val dfEdgeSignaturesVar: DataFrame = tmp
           .groupBy("ApplianceID")
           .agg(
@@ -550,7 +551,7 @@ object EdgeDetection {
         dfEdgeSignaturesVar.printSchema()
         println("showing  dfEdgeSignaturesVar: ")
         dfEdgeSignaturesVar.show()
-        val finalDF: DataFrame = dfEdgeSignatures.join(dfEdgeSignaturesVar,"ApplianceID")
+        val finalDF: DataFrame = dfEdgeSignatures.join(dfEdgeSignaturesVar, "ApplianceID")
         finalDF
       }
 
@@ -559,11 +560,8 @@ object EdgeDetection {
     val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
       .drop(dfAppliancesToPredict("Appliance"))
 
-    (dfEdgeSignatures, dfAppliancesToPredict)
+    dfEdgeSignatures
   }
-
-
-
 
 }
 // TENTATIVO DI FARE IL PRIMO FILTRO SU DFfeatures e poi fare groupby

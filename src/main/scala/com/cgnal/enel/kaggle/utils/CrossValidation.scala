@@ -2,14 +2,67 @@ package com.cgnal.enel.kaggle.utils
 
 import java.util
 
+import com.cgnal.enel.kaggle.helpers.DatasetHelper
+import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.{SQLContext, Row, DataFrame}
 import org.apache.spark.sql.functions.{row_number}
+
+import scala.reflect.io.Path
+import scala.util.Try
+
 /**
   * Created by cavaste on 20/09/16.
   */
 object CrossValidation {
+
+
+  def unionDatasetToDfoverDaysFixedHouse(dayFolderArray: Array[String], house: String,
+                                         sc: SparkContext, sqlContext: SQLContext) = {
+
+    val dirNameCSV_V_h = ReferencePath.filenameCSV_V + house
+    val dirNameCSV_I_h = ReferencePath.filenameCSV_I + house
+    val dirNameTimestamp_h = ReferencePath.filenameTimestamp + house
+
+
+    val dfFeaturesDays: DataFrame =
+      dayFolderArray.map(dayFolder => {
+
+        val filenameCSV_V = dirNameCSV_V_h + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+        val filenameCSV_I = dirNameCSV_I_h + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
+        val filenameTimestamp = dirNameTimestamp_h + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
+
+        val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
+          filenameTimestamp,
+          sc, sqlContext)
+        val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
+        dfFeatures
+      }).reduceLeft((x,y) => x.unionAll(y))
+
+    dfFeaturesDays
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   def validationSplit(dfTag: DataFrame, sqlContext: SQLContext) = {
     val dfCount: DataFrame = dfTag.groupBy("ApplianceID").count()
