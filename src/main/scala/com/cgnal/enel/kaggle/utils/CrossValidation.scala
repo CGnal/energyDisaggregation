@@ -18,43 +18,179 @@ import scala.util.Try
 object CrossValidation {
 
 
-  def unionDatasetToDfoverDaysFixedHouse(dayFolderArray: Array[String], house: String,
-                                         sc: SparkContext, sqlContext: SQLContext) = {
 
-    val dirNameCSV_V_h = ReferencePath.filenameCSV_V + house
-    val dirNameCSV_I_h = ReferencePath.filenameCSV_I + house
-    val dirNameTimestamp_h = ReferencePath.filenameTimestamp + house
+  def creatingDfFeatureFixedHouseAndDay(dayFolder: String, house: String,
+                                        sc: SparkContext, sqlContext: SQLContext,
+                                        readingFromFileLabel: Int = 0) = {
 
 
-    val dfFeaturesDays: DataFrame =
-      dayFolderArray.map(dayFolder => {
+    val filenameCSV_V = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+    val filenameCSV_I = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
+    val filenameTimestamp = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
 
-        val filenameCSV_V = dirNameCSV_V_h + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
-        val filenameCSV_I = dirNameCSV_I_h + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
-        val filenameTimestamp = dirNameTimestamp_h + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
 
-        val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
-          filenameTimestamp,
-          sc, sqlContext)
-        val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
-        dfFeatures
-      }).reduceLeft((x,y) => x.unionAll(y))
+    val filenameDfFeaturesSingleDay = ReferencePath.datasetDirPath + house + "/Test" + dayFolder + "/" +
+      "dfFeature.csv"
 
-    dfFeaturesDays
+
+    val dfFeaturesSingleDay = if (readingFromFileLabel == 0) {
+      val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
+        filenameTimestamp,
+        sc, sqlContext)
+      val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
+      dfFeatures.printSchema()
+
+      val path: Path = Path(filenameDfFeaturesSingleDay)
+      if (path.exists) {
+        Try(path.deleteRecursively())
+      }
+      dfFeatures.write
+        .format("com.databricks.spark.csv")
+        .option("header", "true")
+        .save(filenameDfFeaturesSingleDay)
+      dfFeatures
+    }
+    else {
+      sqlContext.read
+        .format("com.databricks.spark.csv")
+        .option("header", "true") // Use first line of all files as header
+        .option("inferSchema", "true")
+        .load(filenameDfFeaturesSingleDay)
+    }
+
+    dfFeaturesSingleDay
   }
 
 
 
 
 
+    def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String,
+                                            sc: SparkContext, sqlContext: SQLContext,
+                                            readingFromFileLabel: Int = 0) = {
+
+      val dirNameDataset = ReferencePath.datasetDirPath + house
+
+
+      val filenameDfFeaturesOverDays = dirNameDataset + "/Train" + dayFolderArray(0) + "_" + dayFolderArray.last + "/" +
+        "dfFeature.csv"
+
+      val dfFeaturesOverDays = if (readingFromFileLabel == 0) {
+
+        val rowNumberPerDay =
+          dayFolderArray.map(dayFolder => {
+            val filenameCSV_V = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+
+            DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V).length
+          })
+
+        val incrementalRowNumberPerDay: Array[Int] = Array(0, rowNumberPerDay.dropRight(1).toList:_*)
+        val dayFolderArrayWithRowNumber = dayFolderArray.zip(incrementalRowNumberPerDay)
+
+        val dfFeaturesOverDaysTemp: DataFrame =
+          dayFolderArrayWithRowNumber.map(tuple => {
+
+            val dayFolder = tuple._1
+            val filenameCSV_V = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+            val filenameCSV_I = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
+            val filenameTimestamp = dirNameDataset + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
+
+
+            val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V, tuple._2)
+            val dfV: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
+              arrayV, DatasetHelper.Vschema, 1)
+
+            val arrayI = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_I, tuple._2)
+            val dfI: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
+              arrayI, DatasetHelper.Ischema, 1)
+
+            val arrayTimestamp = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTimestamp, tuple._2)
+            val dfTS: DataFrame = DatasetHelper.fromArrayIndexedToDFTimestampOrFeatures(sc, sqlContext,
+              arrayTimestamp, DatasetHelper.TSschema, 0)
+
+            // dataframe with Voltage, Current and TimeTicks relative to a given Phase
+            val dfVI: DataFrame = dfV.join(dfI, "IDtime")
+              .join(dfTS, "IDtime")
+
+
+            val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
+            dfFeatures
+          }).reduceLeft((x, y) => x.unionAll(y))
+
+
+        val path: Path = Path(filenameDfFeaturesOverDays)
+        if (path.exists) {
+          Try(path.deleteRecursively())
+        }
+        dfFeaturesOverDaysTemp.write
+          .format("com.databricks.spark.csv")
+          .option("header", "true")
+          .save(filenameDfFeaturesOverDays)
+
+        dfFeaturesOverDaysTemp
+      }
+      else {
+        sqlContext.read
+          .format("com.databricks.spark.csv")
+          .option("header", "true") // Use first line of all files as header
+          .option("inferSchema", "true")
+          .load(filenameDfFeaturesOverDays)
+      }
+
+
+      dfFeaturesOverDays
+
+    }
 
 
 
 
+  def creatingDfTaggingInfoFixedHouseAndDay(dayFolder: String, house: String,
+                                            sc: SparkContext, sqlContext: SQLContext): DataFrame = {
+
+
+    val filenameTaggingInfo = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TaggingInfo.csv"
+
+
+    val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
+    val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
+      arrayTaggingInfo, DatasetHelper.TagSchema)
+    dfTaggingInfo
+
+  }
 
 
 
 
+  def creatingDfTaggingInfoFixedHouseOverDays(dayFolderArray: Array[String], house: String,
+                                              sc: SparkContext, sqlContext: SQLContext): DataFrame = {
+
+    val dirNameDataset = ReferencePath.datasetDirPath + house
+
+
+    val rowNumberPerDay =
+      dayFolderArray.map(dayFolder => {
+        val filenameTaggingInfo = dirNameDataset + "/Tagged_Training_" + dayFolder + "/TaggingInfo.csv"
+
+        DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo).length
+      })
+
+    val incrementalRowNumberPerDay: Array[Int] = Array(0, rowNumberPerDay.dropRight(1).toList:_*)
+    val dayFolderArrayWithRowNumber = dayFolderArray.zip(incrementalRowNumberPerDay)
+
+
+    val dfTaggingInfoOverDays = dayFolderArrayWithRowNumber.map(tuple => {
+      val dayFolder = tuple._1
+      val filenameTaggingInfo = dirNameDataset + "/Tagged_Training_" + dayFolder + "/TaggingInfo.csv"
+
+      val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo, tuple._2)
+      val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
+        arrayTaggingInfo, DatasetHelper.TagSchema)
+      dfTaggingInfo
+    }).reduceLeft((x, y) => x.unionAll(y))
+
+    dfTaggingInfoOverDays
+  }
 
 
 

@@ -1,5 +1,6 @@
 package com.cgnal.enel.kaggle
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Paths, Files}
 import java.util
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
@@ -66,53 +67,23 @@ object Main {
 
     type SelFeatureType = Double
 
-    val filenameDfEdgeWindowsFeature = ReferencePath.filenameDfEdgeWindowsFeature
-
 
     println("1. INGESTION (from csv to DataFrame)")
     var dateTime = DateTime.now()
     // TODO inserire ciclo su HOUSE e su GIORNI
     val filenameSampleSubmission = ReferencePath.filenameSampleSubmission
-    val filenameCSV_V = ReferencePath.filenameCSV_V
-    val filenameCSV_I = ReferencePath.filenameCSV_I
-    val filenameTimestamp = ReferencePath.filenameTimestamp
-    val filenameTaggingInfo = ReferencePath.filenameTaggingInfo
-    val filenameDfFeatures = ReferencePath.filenameDfFeatures
-    ///////////
-    ///##### writing output
-    // Trigger OnOff tables per appliances, per threshold
-    /////
-    val outputDirName = ReferencePath.outputDirName
-    val edgeVarOutputFileName = ReferencePath.edgeVarOutputFileName
-
-    val ingestionLabel = 0
 
 
-    val dfFeatures = if (ingestionLabel == 1) {
-      val dfVI = DatasetHelper.importingDatasetToDfHouseDay(filenameCSV_V, filenameCSV_I,
-        filenameTimestamp,
-        sc, sqlContext)
-      val dfFeatures = DatasetHelper.addPowerToDfFeatures(dfVI)
-      dfFeatures.printSchema()
+    val dayFolderArrayTraining = Array("07_26_1343286001")
+    val dayFolderTest = "07_27_1343372401"
+    val house = "H4"
 
-      val path: Path = Path (filenameDfFeatures)
-      if (path.exists) {
-        Try(path.deleteRecursively())
-      }
-      dfFeatures.write
-        .format("com.databricks.spark.csv")
-        .option("header", "true")
-        .save(filenameDfFeatures)
-      dfFeatures
-    }
-    else {
-      sqlContext.read
-        .format("com.databricks.spark.csv")
-        .option("header", "true") // Use first line of all files as header
-        .option("inferSchema", "true")
-        .load(filenameDfFeatures)
-    }
 
+    val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house,
+      sc, sqlContext, 0)
+
+    val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house,
+      sc, sqlContext, 0)
 
 
     println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
@@ -121,80 +92,84 @@ object Main {
 
     println("2. RESAMPLING")
     dateTime = DateTime.now()
-    val dfFeatureSmoothed = Resampling.movingAverageReal(dfFeatures, selectedFeature, averageSmoothingWindowSize)
-    val dfFeatureResampled = Resampling.downsampling(dfFeatureSmoothed, downsamplingBinSize)
-    val dfFeatureResampledDiff = Resampling.firstDifference(dfFeatureResampled, selectedFeature, "IDtime")
+    // TRAINING SET
+    val dfFeatureSmoothedTrain = Resampling.movingAverageReal(dfFeatureTrain, selectedFeature, averageSmoothingWindowSize)
+    val dfFeatureResampledTrain = Resampling.downsampling(dfFeatureSmoothedTrain, downsamplingBinSize)
+    val dfFeatureResampledDiffTrain = Resampling.firstDifference(dfFeatureResampledTrain, selectedFeature, "IDtime")
 
-    val dfFeatureEdgeDetection = dfFeatureResampledDiff.cache()
+    val dfFeatureEdgeDetectionTrain = dfFeatureResampledDiffTrain.cache()
+
+    // TEST SET
+    val dfFeatureSmoothedTest = Resampling.movingAverageReal(dfFeatureTest, selectedFeature, averageSmoothingWindowSize)
+    val dfFeatureResampledTest = Resampling.downsampling(dfFeatureSmoothedTest, downsamplingBinSize)
+    val dfFeatureResampledDiffTest = Resampling.firstDifference(dfFeatureResampledTest, selectedFeature, "IDtime")
+
+    val dfFeatureEdgeDetectionTest = dfFeatureResampledDiffTest.cache()
     println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
-
-
-
-
-
-
-
-    val dfSampleSubmission = sqlContext.read
-      .format("com.databricks.spark.csv")
-      .option("header", "true") // Use first line of all files as header
-      .option("inferSchema", "true") // Automatically infer data types
-      .load(filenameSampleSubmission)
-
-    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
-
-
-
-
-
 
 
 
     println("3. EDGE DETECTION ALGORITHM")
     dateTime = DateTime.now()
-    val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
-    val dfTaggingInfo: DataFrame = DatasetHelper.fromArrayIndexedToDFTaggingInfo(sc, sqlContext,
-      arrayTaggingInfo, DatasetHelper.TagSchema)
+    // TAGGING INFO TRAIN
+    val dfTaggingInfoTrain = CrossValidation.creatingDfTaggingInfoFixedHouseOverDays(dayFolderArrayTraining, house,
+      sc, sqlContext)
+    // TAGGING INFO TEST
+    val dfTaggingInfoTest = CrossValidation.creatingDfTaggingInfoFixedHouseAndDay(dayFolderTest, house,
+      sc, sqlContext)
 
-    println("3a Cross-validation")
-    val (dfTaggingInfoTrain, dfTaggingInfoTest) = CrossValidation.validationSplit(dfTaggingInfo, sqlContext)
 
     println("3b Selecting edge windows for a given feature")
-    EdgeDetection.computeStoreDfEdgeWindowsSingleFeature[SelFeatureType](dfFeatureEdgeDetection,
+
+    val dirNameTrain = ReferencePath.datasetDirPath + house + "/Train" + dayFolderArrayTraining(0) +
+      "_" + dayFolderArrayTraining.last
+
+    val dfEdgeWindowsFilename = dirNameTrain + "/dfFeatureEdgeWindows.csv"
+
+    EdgeDetection.computeStoreDfEdgeWindowsSingleFeature[SelFeatureType](dfFeatureEdgeDetectionTrain,
       dfTaggingInfoTrain,
-      filenameTaggingInfo, filenameDfEdgeWindowsFeature,
+      dfEdgeWindowsFilename,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
       sc, sqlContext)
 
     // SINGLE FEATURE SELECTED FEATURE TYPE: DOUBLE --------------------------------------------------------------------
     println("3c. COMPUTING EDGE SIGNATURE of a single Feature")
-    val dfEdgeSignatures = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](filenameDfEdgeWindowsFeature,
+    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
+
+    val dfEdgeSignatures = EdgeDetection.computeEdgeSignatureAppliancesWithVar[SelFeatureType](dfEdgeWindowsTaggingInfo,
       edgeWindowSize, selectedFeature, classOf[SelFeatureType],
       filenameSampleSubmission,
       sc, sqlContext)
 
     dfEdgeSignatures.cache()
-
-
-    val path: Path = Path (edgeVarOutputFileName)
-    if (path.exists) {
-      Try(path.deleteRecursively())
-    }
-    dfEdgeSignatures.write
-      .format("com.databricks.spark.csv")
-      .option("header", "true")
-      .save(edgeVarOutputFileName)
-
-
     println("Time for EDGE DETECTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+    // saving dfEdgeSignature
+    val edgeVarOutputFileName = dirNameTrain + "/onoff_EdgeSignatureWithVar.csv"
+    CSVutils.storingSparkCsv(dfEdgeSignatures, edgeVarOutputFileName)
+
+
+
+
+
 
 
 
     println("4. COMPUTING EDGE SIMILARITY for a single appliance")
     dateTime = DateTime.now()
 
+    // selecting appliances founded in the Training set
+    val dfSampleSubmission = sqlContext.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true") // Use first line of all files as header
+      .option("inferSchema", "true") // Automatically infer data types
+      .load(filenameSampleSubmission)
 
-    val appliancesTrain: Array[Int] = dfTaggingInfoTrain.groupBy("ApplianceID").agg(first("ApplianceID").as("ApplianceIDtrain"))
-      .select("ApplianceIDtrain").map(row => row.getAs[Int](0)).collect()
+    val dfAppliancesSampleSubmission: DataFrame = dfSampleSubmission.select("Appliance").distinct()
+
+    val appliancesTrain: Array[Int] = dfEdgeSignatures.join(dfAppliancesSampleSubmission,
+      dfEdgeSignatures("ApplianceID") === dfAppliancesSampleSubmission).select("ApplianceID")
+      .map(row => row.getAs[Int](0)).collect()
 
 
     //Array esterno appliance, Array interno threshold
@@ -208,43 +183,31 @@ object Main {
         val OffSignature: Array[SelFeatureType] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
           .head.getAs[mutable.WrappedArray[SelFeatureType]]("OFF_TimeSignature_" + selectedFeature).toArray[SelFeatureType]
 
-        val dfRealFeatureEdgeScoreAppliance = EdgeDetection.computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeatureEdgeDetection,
+        // EVALUATION HL OVER TRAINING SET
+        val dfRealFeatureEdgeScoreApplianceTrain = EdgeDetection.computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeatureEdgeDetectionTrain,
           selectedFeature,
           OnSignature, OffSignature,
           timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
           sc, sqlContext).cache()
 
-        var writingOutput = outputDirName + "ScoreNoDS" + "_AppID" + applianceID.toString + ".csv"
-        val path2: Path = Path(writingOutput)
-        if (path2.exists) {
-          Try(path2.deleteRecursively())
-        }
-        dfRealFeatureEdgeScoreAppliance.write
-          .format("com.databricks.spark.csv")
-          .option("header", "true")
-          .save(writingOutput)
+        // saving dfRealFeatureEdgeScoreApplianceTrain
+        val filenameDfRealFeatureEdgeScoreAppliance = dirNameTrain + "/ScoreNoDS_AppID" + applianceID.toString + ".csv"
+        CSVutils.storingSparkCsv(dfRealFeatureEdgeScoreApplianceTrain, filenameDfRealFeatureEdgeScoreAppliance)
+
 
         println("Time for COMPUTING EDGE SIMILARITY: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
-
-
         println("5 RESAMPLING SIMILARITY SCORES")
         dateTime = DateTime.now()
-        val dfRealFeatureEdgeScoreApplianceDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreAppliance,
+        val dfRealFeatureEdgeScoreApplianceDStrain = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScoreApplianceTrain,
           selectedFeature, downsamplingBinPredictionSize).cache()
 
-        dfRealFeatureEdgeScoreAppliance.unpersist()
+        dfRealFeatureEdgeScoreApplianceTrain.unpersist()
 
         println("Time for RESAMPLING SIMILARITY SCORES: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
-        writingOutput = outputDirName + "ScoreDS" + "_AppID" + applianceID.toString + ".csv"
-        val path: Path = Path(writingOutput)
-        if (path.exists) {
-          Try(path.deleteRecursively())
-        }
-        dfRealFeatureEdgeScoreApplianceDS.write
-          .format("com.databricks.spark.csv")
-          .option("header", "true")
-          .save(writingOutput)
+        // saving dfRealFeatureEdgeScoreApplianceTrain DOWNSAMPLED
+        val filenameDfRealFeatureEdgeScoreApplianceDS = dirNameTrain + "/ScoreDS_AppID" + applianceID.toString + ".csv"
+        CSVutils.storingSparkCsv(dfRealFeatureEdgeScoreApplianceDStrain, filenameDfRealFeatureEdgeScoreApplianceDS)
 
 
 
@@ -254,15 +217,22 @@ object Main {
         val nrOfThresholds = 2
 
         println("6a add ground truth prediction")
-        val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
-          .filter(dfTaggingInfo("applianceID") === applianceID)
+        val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfoTrain
+          .filter(dfTaggingInfoTrain("applianceID") === applianceID)
           .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
 
-        val dfGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDS, onOffWindowsGroundTruth,
+        val outputFilename = dirNameTrain + "/OnOffArrayGroundTruth_AppID" + applianceID.toString + ".txt"
+
+        val stringOnOff: String = onOffWindowsGroundTruth.mkString("\n")
+        Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
+
+
+
+        val dfGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreApplianceDStrain, onOffWindowsGroundTruth,
           "TimestampPrediction", "GroundTruth").cache()
 
         println("6b selecting threshold to test")
-        val thresholdToTestSorted: Array[SelFeatureType] = SimilarityScore.extractingThreshold(dfRealFeatureEdgeScoreApplianceDS,
+        val thresholdToTestSorted: Array[SelFeatureType] = SimilarityScore.extractingThreshold(dfRealFeatureEdgeScoreApplianceDStrain,
           "DeltaScorePrediction_" + selectedFeature,
           nrOfThresholds)
 
@@ -270,9 +240,9 @@ object Main {
         println("6c computing hamming loss for each threshold")
         val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
           HammingLoss.evaluateHammingLoss(
-            dfRealFeatureEdgeScoreApplianceDS,
+            dfRealFeatureEdgeScoreApplianceDStrain,
             dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-            "TimestampPrediction", applianceID, threshold, outputDirName)
+            "TimestampPrediction", applianceID, threshold, dirNameTrain)
         )
 
         val HLoverThreshold: Array[(SelFeatureType, SelFeatureType)] = thresholdToTestSorted.zip(hammingLosses)
@@ -282,19 +252,19 @@ object Main {
 
         HLoverThreshold.foreach(x => println(x._1, x._2))
 
-        val applianceName = dfTaggingInfo.filter(dfTaggingInfo("applianceID") === applianceID).head.getAs[String]("ApplianceName")
+        val applianceName = dfTaggingInfoTrain.filter(dfTaggingInfoTrain("applianceID") === applianceID).head.getAs[String]("ApplianceName")
 
         (applianceID, applianceName, HLoverThreshold)
       }
     //save temp object
     val temp = resultsOverAppliances.toList
-    val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "resultsOverAppliances.dat"))
+    val store = new ObjectOutputStream(new FileOutputStream(dirNameTrain + "/resultsOverAppliances.dat"))
     store.writeObject(temp)
     store.close()
 
 
     val bestResultOverAppliances =
-      HammingLoss.extractingHLoverThresholdAndAppliances(outputDirName + "resultsOverAppliances.dat")
+      HammingLoss.extractingHLoverThresholdAndAppliances(dirNameTrain + "/resultsOverAppliances.dat")
 
   }
 

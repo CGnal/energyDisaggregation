@@ -58,7 +58,8 @@ object HammingLoss {
       SimilarityScore.findOnOffIntervals(
         dfEdgeScores, threshold, scoresColName, timeStampColName)
 
-    val outputFilename = onOffOutputDirName+"OnOffArray" + "_AppID" + applianceID.toString + "_threshold" + threshold.toInt.toString +".txt"
+    val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
+      applianceID.toString + "_threshold" + threshold.toInt.toString +".txt"
 
     val stringOnOff: String = onOffWindows.mkString("\n")
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))

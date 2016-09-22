@@ -401,15 +401,16 @@ object EdgeDetection {
 
   def computeStoreDfEdgeWindowsSingleFeature[SelFeatureType:ClassTag](dfFeatures: DataFrame,
                                                                       dfTaggingInfo: DataFrame,
-                                                                      filenameTaggingInfo: String, dfEdgeWindowsFilename: String,
+                                                                      dfEdgeWindowsFilename: String,
                                                                       selectedFeature: String,
-                                                                      timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long, edgeWindowSize: Int,
-                                                                      sc: SparkContext, sqlContext: SQLContext): (SchemaRDD, SchemaRDD) = {
-
+                                                                      timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long,
+                                                                      edgeWindowSize: Int,
+                                                                      sc: SparkContext, sqlContext: SQLContext) = {
 
     val dfEdgeWindows = selectingEdgeWindowsFromTagWithTimeIntervalSingleFeature[SelFeatureType](dfFeatures, dfTaggingInfo,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
       sc, sqlContext)
+
 
     val dfEdgeWindowsTaggingInfo: DataFrame = dfEdgeWindows.join(dfTaggingInfo, "IDedge")
 
@@ -420,11 +421,11 @@ object EdgeDetection {
     dfEdgeWindowsTaggingInfo.write
       .avro(dfEdgeWindowsFilename)
 
-    (dfEdgeWindowsTaggingInfo, dfTaggingInfo)
+    dfEdgeWindowsTaggingInfo
   }
 
 
-  def computeEdgeSignatureAppliances[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String, edgeWindowSize: Int,
+  def computeEdgeSignatureAppliances[SelFeatureType:ClassTag](dfEdgeWindowsTaggingInfo: DataFrame, edgeWindowSize: Int,
                                                               selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
                                                               filenameSampleSubmission: String,
                                                               sc: SparkContext, sqlContext: SQLContext) = {
@@ -439,8 +440,6 @@ object EdgeDetection {
       .load(filenameSampleSubmission)
 
     val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
-
-    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
 
     val dfEdgeSignaturesAll =
       if (selectedFeatureType.isAssignableFrom(classOf[Map[String,Double]])) {
@@ -478,7 +477,7 @@ object EdgeDetection {
 
 
 
-  def computeEdgeSignatureAppliancesWithVar[SelFeatureType:ClassTag](dfEdgeWindowsFilename: String,
+  def computeEdgeSignatureAppliancesWithVar[SelFeatureType:ClassTag](dfEdgeWindowsTaggingInfo: DataFrame,
                                                                      edgeWindowSize: Int,
                                                                      selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
                                                                      filenameSampleSubmission: String,
@@ -496,7 +495,6 @@ object EdgeDetection {
 
     val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
 
-    val dfEdgeWindowsTaggingInfo = sqlContext.read.avro(dfEdgeWindowsFilename).cache()
     // TODO : implementation of the Variance OVer Complex
     val dfEdgeSignaturesAll =
       if (selectedFeatureType.isAssignableFrom(classOf[Map[String, Double]])) {

@@ -181,8 +181,7 @@ object DatasetHelper {
     * @param filename
     * @return Array of Tuple2 where the first element of the tuple is the row of the csv and the second the index of the row
     */
-  def fromCSVtoArrayAddingRowIndex(filename: String):
-  Array[(Array[String], Int)] = {
+  def fromCSVtoArrayAddingRowIndex(filename: String, startingIndex: Int = 0): Array[(Array[String], Int)] = {
     // each row is an array of strings (the columns in the csv file)
     val rows = ArrayBuffer[Array[String]]()
 
@@ -194,7 +193,8 @@ object DatasetHelper {
     bufferedSource.close
 
     val indexedTable: Array[(Array[String], Int)] = rows.toArray.zipWithIndex
-    indexedTable
+
+    indexedTable.map(tuple => (tuple._1, tuple._2 + startingIndex))
 
   }
 

@@ -1,12 +1,31 @@
 package com.cgnal.enel.kaggle.utils
 
 import java.io.{BufferedWriter, File, FileWriter}
+import org.apache.spark.sql.DataFrame
+
 import scala.io.Source
+import scala.reflect.io.Path
+import scala.util.Try
 
 /**
   * Created by cavaste on 21/09/16.
   */
 object CSVutils {
+
+
+  def storingSparkCsv(df: DataFrame,
+                      outputFileName: String) = {
+
+    val path: Path = Path (outputFileName)
+    if (path.exists) {
+      Try(path.deleteRecursively())
+    }
+    df.write
+      .format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save(outputFileName)
+  }
+
 
   def Juxtappose(
                   fileNameCSV1: String,
