@@ -62,6 +62,7 @@ src/main/scala/com/cgnal/enel/kaggle/utils/ReferencePath.scala
 
 metastore_db/**
 
+
 *.iml
 .idea
 
