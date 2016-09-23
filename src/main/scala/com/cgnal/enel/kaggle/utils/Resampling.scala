@@ -49,13 +49,13 @@ object Resampling {
 
     val dfScoreDownsampled: DataFrame = dfIDscoreDownsampling.groupBy("IDscoreDownsampling")
       .agg(min(df("Timestamp")).as("TimestampPrediction"),
-        max(df("nmsdON_Time_" + selectedFeature)).as("nmsdON_TimePrediction_" + selectedFeature),
-        max(df("nmsdOFF_Time_" + selectedFeature)).as("nmsdOFF_TimePrediction_" + selectedFeature))
+        max(df("scoreON_Time_" + selectedFeature)).as("scoreON_TimePrediction_" + selectedFeature),
+        max(df("scoreOFF_Time_" + selectedFeature)).as("scoreOFF_TimePrediction_" + selectedFeature))
 
     // Delta Score in [-2,2]
     val dfFeatureEdgeScoreAppliancePrediction = dfScoreDownsampled.withColumn(
-      "DeltaScorePrediction_" + selectedFeature, dfScoreDownsampled("nmsdON_TimePrediction_" + selectedFeature)
-        - dfScoreDownsampled("nmsdOFF_TimePrediction_" + selectedFeature)
+      "DeltaScorePrediction_" + selectedFeature, dfScoreDownsampled("scoreON_TimePrediction_" + selectedFeature)
+        - dfScoreDownsampled("scoreOFF_TimePrediction_" + selectedFeature)
     )
 
     dfFeatureEdgeScoreAppliancePrediction

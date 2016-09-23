@@ -87,11 +87,7 @@ object HammingLoss {
 
 
 
-  def extractingHLoverThresholdAndAppliances(filenameResultsOverAppliances: String): Array[(Int, String, Double, Double)] = {
-
-    val reader = new ObjectInputStream(new FileInputStream(filenameResultsOverAppliances))
-    val resultsOverAppliances = reader.readObject().asInstanceOf[Array[(Int, String, Array[(Double, Double)])]]
-    reader.close()
+  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[(Double, Double)])]): Array[(Int, String, Double, Double)] = {
 
 
     val bestResultOverAppliances: Array[(Int, String, Double, Double)] = resultsOverAppliances.map(tuple => {

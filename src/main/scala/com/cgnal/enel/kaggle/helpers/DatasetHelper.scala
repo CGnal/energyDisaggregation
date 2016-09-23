@@ -163,8 +163,10 @@ object DatasetHelper {
 
       if (rowLength != schema.length - 1) sys.error("schema length is not equal to the number of columns found in the CSV")
 
+
       val valuesOnRow: Array[Any] = Array(rowString(0).toInt, rowString(1).toString.replace("\"", ""),
         (BigDecimal(rowString(2)) * timestampFactor).toLongExact, (BigDecimal(rowString(3)) * timestampFactor).toLongExact)
+
 
       val IDandComplexKeys = line._2 +: valuesOnRow
       Row(IDandComplexKeys: _*)

@@ -67,9 +67,9 @@ object Main {
 
     val nrThresholdsPerAppliance = 2
 
-    val readingFromFileLabelDfIngestion = 1
+    val readingFromFileLabelDfIngestion = 0
     
-    val readingFromFileLabelDfEdgeSignature = 1
+    val readingFromFileLabelDfEdgeSignature = 0
 
 
     //------------------------------------------------------------------------------------------------------------------
@@ -80,6 +80,7 @@ object Main {
     val downsamplingBinPredictionSize: Int = 60/(downsamplingBinSize * 0.167).round.toInt
     //------------------------------------------------------------------------------------------------------------------
 
+    if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
 
 
     // 1 INGESTION -----------------------------------------------------------------------------------------------------
@@ -135,7 +136,7 @@ object Main {
     println("3b Selecting edge windows for a given feature")
 
 
-    val dfEdgeSignaturesFileName = dirNameTrain + "/onoff_EdgeSignatureWithVar.csv"
+    val dfEdgeSignaturesFileName = dirNameTrain + "/onoff_EdgeSignature"
 
     val dfEdgeSignatures =
       if (readingFromFileLabelDfEdgeSignature == 0) {
@@ -145,18 +146,7 @@ object Main {
           sc, sqlContext)
       }
       else {
-
-
-
-
-
-
-
-        sqlContext.read
-          .format("com.databricks.spark.csv")
-          .option("header", "true") // Use first line of all files as header
-          .option("inferSchema", "true") // Automatically infer data types
-          .load(dfEdgeSignaturesFileName)
+        sqlContext.read.avro(dfEdgeSignaturesFileName + ".avro").cache()
       }
     //------------------------------------------------------------------------------------------------------------------
 
@@ -171,18 +161,16 @@ object Main {
 
     val dfAppliancesSampleSubmission: DataFrame = dfSampleSubmission.select("Appliance").distinct()
 
-    val appliancesTrainTemp: Array[Int] = dfEdgeSignatures.join(dfAppliancesSampleSubmission,
+    val dfAppliancesTrain = dfEdgeSignatures.join(dfAppliancesSampleSubmission,
       dfEdgeSignatures("ApplianceID") === dfAppliancesSampleSubmission("Appliance")).select("ApplianceID")
-      .map(row => row.getAs[Int](0)).collect()
+
+    val appliancesTrain: Array[Int] = dfAppliancesTrain.map(row => row.getAs[Int](0)).collect()
     //------------------------------------------------------------------------------------------------------------------
-
-    val appliancesTrain = Array(appliancesTrainTemp.head)
-
 
     // BUILD PREDICTION AND COMPUTE HAMMING LOSS OVER ALL THE APPLIANCES -----------------------------------------------
     // TRAINING SET
-    val bestResultOverAppliancesTrain: Array[(Int, String, SelFeatureType, SelFeatureType)] = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
-      dfEdgeSignatures, dfTaggingInfoTrain,
+/*    val bestResultOverAppliancesTrain: Array[(Int, String, SelFeatureType, SelFeatureType)] = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
+      dfEdgeSignatures, dfTaggingInfoTrain, dfTaggingInfoTrain,
       appliancesTrain,
       selectedFeature,
       timestepsNumberPreEdge, timestepsNumberPostEdge,
@@ -198,15 +186,20 @@ object Main {
     val storeTrain = new ObjectOutputStream(new FileOutputStream(dirNameTrain + "/bestResultsOverAppliances.dat"))
     storeTrain.writeObject(temp)
     storeTrain.close()
-
+*/
 
     // TEST SET
+/*    val appliancesTest: Array[Int] = dfAppliancesTrain.join(dfTaggingInfoTest,
+      dfAppliancesTrain("ApplianceID") === dfTaggingInfoTest("Appliance")).select("ApplianceID")
+      .map(row => row.getAs[Int](0)).collect()
+*/
     val dirNameTest = ReferencePath.datasetDirPath + house + "/Test" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
     val bestResultOverAppliancesTest = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTest,
-      dfEdgeSignatures, dfTaggingInfoTest,
+      dfEdgeSignatures,
+      dfTaggingInfoTest, dfTaggingInfoTrain,
       appliancesTrain,
       selectedFeature,
       timestepsNumberPreEdge, timestepsNumberPostEdge,
@@ -217,6 +210,7 @@ object Main {
       sc: SparkContext, sqlContext: SQLContext)
 
     bestResultOverAppliancesTest.foreach(x => println(x))
+
 
     val temp2 = bestResultOverAppliancesTest.toList
     val storeTest = new ObjectOutputStream(new FileOutputStream(dirNameTest + "/bestResultsOverAppliances.dat"))

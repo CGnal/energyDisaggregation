@@ -167,7 +167,6 @@ object CrossValidation {
 
     val dirNameDataset = ReferencePath.datasetDirPath + house
 
-
     val rowNumberPerDay =
       dayFolderArray.map(dayFolder => {
         val filenameTaggingInfo = dirNameDataset + "/Tagged_Training_" + dayFolder + "/TaggingInfo.csv"

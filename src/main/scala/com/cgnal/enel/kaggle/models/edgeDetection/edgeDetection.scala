@@ -381,7 +381,7 @@ object EdgeDetection {
     val maxOff = dfMinMaxOff.head.getAs[Double]("max")
     dfMinMaxOff.unpersist()
 
-    // Normalized edge score in [0,1]
+    // Normalized mean squared distance in [0,1]
     val dfFeaturesNormalizedEdgeScoreTemp = dfFeaturesEdgeScore.withColumn(
       "nmsdON_Time_" + selectedFeature,
       (dfFeaturesEdgeScore("msdON_Time_" + selectedFeature) - minOn)/(maxOn-minOn))
@@ -389,10 +389,17 @@ object EdgeDetection {
         "nmsdOFF_Time_" + selectedFeature,
         (dfFeaturesEdgeScore("msdOFF_Time_" + selectedFeature) - minOff)/(maxOff-minOff))
 
+    val dfFeaturesNormalizedEdgeScoreTemp2 = dfFeaturesNormalizedEdgeScoreTemp.withColumn(
+      "scoreON_Time_" + selectedFeature,
+      (dfFeaturesNormalizedEdgeScoreTemp("nmsdON_Time_" + selectedFeature) - 1)*(-1))
+      .withColumn(
+        "scoreOFF_Time_" + selectedFeature,
+        (dfFeaturesNormalizedEdgeScoreTemp("nmsdOFF_Time_" + selectedFeature) - 1)*(-1))
+
     // Delta Score in [-2,2]
-    val     dfFeatureEdgeScoreAppliance = dfFeaturesNormalizedEdgeScoreTemp.withColumn(
-      "DeltaScore_" + selectedFeature, dfFeaturesNormalizedEdgeScoreTemp("nmsdON_Time_" + selectedFeature)
-        - dfFeaturesNormalizedEdgeScoreTemp("nmsdOFF_Time_" + selectedFeature)
+    val dfFeatureEdgeScoreAppliance = dfFeaturesNormalizedEdgeScoreTemp2.withColumn(
+      "DeltaScore_" + selectedFeature, dfFeaturesNormalizedEdgeScoreTemp2("scoreON_Time_" + selectedFeature)
+        - dfFeaturesNormalizedEdgeScoreTemp2("scoreOFF_Time_" + selectedFeature)
     )
 
     dfFeaturesEdgeScore.unpersist()
@@ -669,9 +676,9 @@ object EdgeDetection {
 
 
 
-
   def buildPredictionRealFeatureLoopOverAppliances(dfFeature: DataFrame,
-                                                   dfEdgeSignatures: DataFrame, dfTaggingInfo: DataFrame,
+                                                   dfEdgeSignatures: DataFrame,
+                                                   dfTaggingInfoCurrent: DataFrame, dfTaggingInfoTrain: DataFrame,
                                                    appliancesArray: Array[Int],
                                                    selectedFeature: String,
                                                    timestepsNumberPreEdge: Int, timestepsNumberPostEdge: Int,
@@ -681,8 +688,10 @@ object EdgeDetection {
                                                    outputDirName: String,
                                                    sc: SparkContext, sqlContext: SQLContext) = {
 
-    val resultsOverAppliancesTrain: Array[(Int, String, Array[(Double, Double)])] =
+    val resultsOverAppliances: Array[(Int, String, Array[(Double, Double)])] =
       appliancesArray.map { (applianceID: Int) =>
+
+        println("\nAnalyzing appliance: " + applianceID.toString)
 
         val dfRealFeatureEdgeScoreDS = EdgeDetection.buildStoreDfSimilarityScoreRealFeature(dfFeature,
           dfEdgeSignatures, applianceID, selectedFeature,
@@ -691,17 +700,14 @@ object EdgeDetection {
           outputDirName, sc, sqlContext)
 
         val dfGroundTruth = EdgeDetection.buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS,
-          dfTaggingInfo, applianceID, outputDirName).cache()
+          dfTaggingInfoCurrent, applianceID, outputDirName).cache()
 
         println("Selecting threshold to test")
-        val thresholdToTestSortedTrain: Array[Double] = SimilarityScore.extractingRandomThreshold(dfRealFeatureEdgeScoreDS,
+        val thresholdToTestSortedTrain: Array[Double] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
           "DeltaScorePrediction_" + selectedFeature, nrThresholdsPerAppliance)
 
-
-
-
         val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS,
-          dfGroundTruth, dfTaggingInfo, thresholdToTestSortedTrain, applianceID, selectedFeature, outputDirName)
+          dfGroundTruth, dfTaggingInfoTrain, thresholdToTestSortedTrain, applianceID, selectedFeature, outputDirName)
 
         dfRealFeatureEdgeScoreDS.unpersist()
         dfGroundTruth.unpersist()
@@ -710,13 +716,14 @@ object EdgeDetection {
 
       }
     //save resultsOverAppliancesTrain
-    val temp = resultsOverAppliancesTrain.toList
+    val temp = resultsOverAppliances.toList
     val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "/resultsOverAppliances.dat"))
     store.writeObject(temp)
     store.close()
 
+
     val bestResultOverAppliances =
-      HammingLoss.extractingHLoverThresholdAndAppliances(outputDirName + "/resultsOverAppliances.dat")
+      HammingLoss.extractingHLoverThresholdAndAppliances(resultsOverAppliances)
 
     bestResultOverAppliances
 
@@ -747,17 +754,20 @@ object EdgeDetection {
 
     dfEdgeWindowsTaggingInfo.unpersist()
 
+    val dfEdgeSignaturesGood = dfEdgeSignatures.
+      filter(dfEdgeSignatures("ON_TimeSignature_" + selectedFeature).!==(dfEdgeSignatures("OFF_TimeSignature_" + selectedFeature)))
+
     // saving dfEdgeSignature
-//    CSVutils.storingSparkCsv(dfEdgeSignatures, dfEdgeSignaturesFileName)
-    val path: Path = Path (dfEdgeSignaturesFileName)
+    val path: Path = Path (dfEdgeSignaturesFileName + ".avro")
     if (path.exists) {
       Try(path.deleteRecursively())
     }
-    dfEdgeSignatures.write
-      .avro(dfEdgeSignaturesFileName)
+    dfEdgeSignaturesGood.write
+      .avro(dfEdgeSignaturesFileName + ".avro")
 
+    CSVutils.storingSparkCsv(dfEdgeSignaturesGood, dfEdgeSignaturesFileName + ".csv")
 
-    dfEdgeSignatures
+    dfEdgeSignaturesGood
   }
 
 }
