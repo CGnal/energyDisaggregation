@@ -165,9 +165,9 @@ object SimilarityScore {
 
 
 
-  def extractingThreshold(dfEdgeScores: DataFrame,
-                          scoresColName: String,
-                          nrOfThresholds: Int): Array[Double] = {
+  def extractingRandomThreshold(dfEdgeScores: DataFrame,
+                                scoresColName: String,
+                                nrOfThresholds: Int): Array[Double] = {
 
     val thresholds: Array[Double] =
       dfEdgeScores
@@ -186,5 +186,30 @@ object SimilarityScore {
 
     thresholdToTestSorted
   }
+
+
+
+
+//  def extractingUniformlySpacedThreshold(dfEdgeScores: DataFrame,
+//                                         scoresColName: String,
+//                                         nrOfThresholds: Int): Array[Double] = {
+//
+//    val thresholdsMax: Double =
+//      dfEdgeScores
+//        .select(scoresColName).agg(max(scoresColName)).head.getAs[Double](scoresColName)
+//
+//    val thresholdsMin: Double =
+//      dfEdgeScores
+//        .select(scoresColName).agg(min(scoresColName)).head.getAs[Double](scoresColName)
+//
+//
+//
+//    val thresholdToTestSorted: Array[Double] = thresholdsMin*2 to thresholdsMax by 0.001
+//
+//    thresholdToTestSorted
+//  }
+
+
+
 
 }

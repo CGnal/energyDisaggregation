@@ -694,8 +694,11 @@ object EdgeDetection {
           dfTaggingInfo, applianceID, outputDirName).cache()
 
         println("Selecting threshold to test")
-        val thresholdToTestSortedTrain: Array[Double] = SimilarityScore.extractingThreshold(dfRealFeatureEdgeScoreDS,
+        val thresholdToTestSortedTrain: Array[Double] = SimilarityScore.extractingRandomThreshold(dfRealFeatureEdgeScoreDS,
           "DeltaScorePrediction_" + selectedFeature, nrThresholdsPerAppliance)
+
+
+
 
         val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS,
           dfGroundTruth, dfTaggingInfo, thresholdToTestSortedTrain, applianceID, selectedFeature, outputDirName)
@@ -745,7 +748,14 @@ object EdgeDetection {
     dfEdgeWindowsTaggingInfo.unpersist()
 
     // saving dfEdgeSignature
-    CSVutils.storingSparkCsv(dfEdgeSignatures, dfEdgeSignaturesFileName)
+//    CSVutils.storingSparkCsv(dfEdgeSignatures, dfEdgeSignaturesFileName)
+    val path: Path = Path (dfEdgeSignaturesFileName)
+    if (path.exists) {
+      Try(path.deleteRecursively())
+    }
+    dfEdgeSignatures.write
+      .avro(dfEdgeSignaturesFileName)
+
 
     dfEdgeSignatures
   }

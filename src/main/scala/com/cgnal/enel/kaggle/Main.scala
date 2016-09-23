@@ -65,11 +65,11 @@ object Main {
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 20
+    val nrThresholdsPerAppliance = 2
 
     val readingFromFileLabelDfIngestion = 1
     
-    val readingFromFileLabelDfEdgeSignature = 0
+    val readingFromFileLabelDfEdgeSignature = 1
 
 
     //------------------------------------------------------------------------------------------------------------------
@@ -145,6 +145,13 @@ object Main {
           sc, sqlContext)
       }
       else {
+
+
+
+
+
+
+
         sqlContext.read
           .format("com.databricks.spark.csv")
           .option("header", "true") // Use first line of all files as header
@@ -164,15 +171,17 @@ object Main {
 
     val dfAppliancesSampleSubmission: DataFrame = dfSampleSubmission.select("Appliance").distinct()
 
-    val appliancesTrain: Array[Int] = dfEdgeSignatures.join(dfAppliancesSampleSubmission,
+    val appliancesTrainTemp: Array[Int] = dfEdgeSignatures.join(dfAppliancesSampleSubmission,
       dfEdgeSignatures("ApplianceID") === dfAppliancesSampleSubmission("Appliance")).select("ApplianceID")
       .map(row => row.getAs[Int](0)).collect()
     //------------------------------------------------------------------------------------------------------------------
 
+    val appliancesTrain = Array(appliancesTrainTemp.head)
+
 
     // BUILD PREDICTION AND COMPUTE HAMMING LOSS OVER ALL THE APPLIANCES -----------------------------------------------
     // TRAINING SET
-    val bestResultOverAppliancesTrain = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
+    val bestResultOverAppliancesTrain: Array[(Int, String, SelFeatureType, SelFeatureType)] = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
       dfEdgeSignatures, dfTaggingInfoTrain,
       appliancesTrain,
       selectedFeature,
