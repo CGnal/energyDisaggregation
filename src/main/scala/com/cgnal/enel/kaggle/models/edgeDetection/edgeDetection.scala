@@ -1,5 +1,7 @@
-package com.cgnal.enel.kaggle.models.EdgeDetection
+package com.cgnal.enel.kaggle.models.edgeDetection
 
+import java.io.{FileOutputStream, ObjectOutputStream}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Paths, Files}
 import java.security.Timestamp
 import java.util
@@ -16,7 +18,7 @@ import org.joda.time.DateTime
 import org.apache.spark.sql.functions.{min,max,abs,avg}
 
 import scala.collection
-import scala.collection.Map
+import scala.collection.{mutable, Map}
 import scala.reflect.ClassTag
 import com.databricks.spark.avro._
 
@@ -154,11 +156,11 @@ object EdgeDetection {
 
 
 
-  def selectingEdgeWindowsFromTagWithTimeIntervalSingleFeature[SelFeatureType:ClassTag](dfFeatures: DataFrame, dfTaggingInfo: DataFrame,
-                                                                                        selectedFeature: String,
-                                                                                        timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long, edgeWindowSize: Int,
-                                                                                        sc: SparkContext, sqlContext: SQLContext,
-                                                                                        timestampFactor: Double = 1E7): DataFrame = {
+  def selectingEdgeWindowsRealFromTagWithTimeIntervalSingleFeature(dfFeatures: DataFrame, dfTaggingInfo: DataFrame,
+                                                                   selectedFeature: String,
+                                                                   timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long, edgeWindowSize: Int,
+                                                                   sc: SparkContext, sqlContext: SQLContext,
+                                                                   timestampFactor: Double = 1E7): DataFrame = {
     import sqlContext.implicits._
     var dateTime = DateTime.now()
 
@@ -193,8 +195,8 @@ object EdgeDetection {
         dfFeaturesSorted.filter($"Timestamp".gt(startTimeOn))
           .filter($"Timestamp".lt(endTimeOn))
 
-      val featureArrayWindowOnTime: Array[SelFeatureType] = dfFeaturesWindowOn
-        .map(r => r.getAs[SelFeatureType](r.fieldIndex(selectedFeature))).collect
+      val featureArrayWindowOnTime: Array[Double] = dfFeaturesWindowOn
+        .map(r => r.getAs[Double](r.fieldIndex(selectedFeature))).collect
 /*          val pippo = Try{r.getAs[SelFeatureType](r.fieldIndex(selectedFeature))}
           pippo match {
             case Success(value) => value
@@ -222,14 +224,14 @@ object EdgeDetection {
         dfFeaturesSorted.filter($"Timestamp".gt(startTimeOff))
           .filter($"Timestamp".lt(endTimeOff))
 
-      val featureArrayWindowOffTime: Array[SelFeatureType] = dfFeaturesWindowOff
+      val featureArrayWindowOffTime: Array[Double] = dfFeaturesWindowOff
         .select(selectedFeature)
-        .map(r => r.getAs[SelFeatureType](r.fieldIndex(selectedFeature)))
+        .map(r => r.getAs[Double](r.fieldIndex(selectedFeature)))
         .collect()
       val currentWindowSizeOffTime = featureArrayWindowOffTime.size
       println("Original feature window OFF_Time length: " + currentWindowSizeOffTime.toString)
       // MANUALLY REMOVING EXTRA POINTS IN THE WINDOW
-      val FeatureArrayWindowOffTimeCut: Array[SelFeatureType] =
+      val FeatureArrayWindowOffTimeCut: Array[Double] =
         if (currentWindowSizeOffTime > edgeWindowSize) featureArrayWindowOffTime.take(edgeWindowSize)
         else featureArrayWindowOffTime
       println("Time for featureWindowOff: " + (DateTime.now().getMillis - dateTime.getMillis) / 1000 + " seconds")
@@ -399,15 +401,15 @@ object EdgeDetection {
   }
 
 
-  def computeStoreDfEdgeWindowsSingleFeature[SelFeatureType:ClassTag](dfFeatures: DataFrame,
-                                                                      dfTaggingInfo: DataFrame,
-                                                                      dfEdgeWindowsFilename: String,
-                                                                      selectedFeature: String,
-                                                                      timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long,
-                                                                      edgeWindowSize: Int,
-                                                                      sc: SparkContext, sqlContext: SQLContext) = {
+  def computeStoreDfEdgeWindowsTaggingInfoSingleFeature[SelFeatureType:ClassTag](dfFeatures: DataFrame,
+                                                                                 dfTaggingInfo: DataFrame,
+                                                                                 dfEdgeWindowsFilename: String,
+                                                                                 selectedFeature: String,
+                                                                                 timestampIntervalPreEdge: Long, timestampIntervalPostEdge: Long,
+                                                                                 edgeWindowSize: Int,
+                                                                                 sc: SparkContext, sqlContext: SQLContext) = {
 
-    val dfEdgeWindows = selectingEdgeWindowsFromTagWithTimeIntervalSingleFeature[SelFeatureType](dfFeatures, dfTaggingInfo,
+    val dfEdgeWindows = selectingEdgeWindowsRealFromTagWithTimeIntervalSingleFeature(dfFeatures, dfTaggingInfo,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
       sc, sqlContext)
 
@@ -477,23 +479,16 @@ object EdgeDetection {
 
 
 
-  def computeEdgeSignatureAppliancesWithVar[SelFeatureType:ClassTag](dfEdgeWindowsTaggingInfo: DataFrame,
-                                                                     edgeWindowSize: Int,
-                                                                     selectedFeature: String, selectedFeatureType: Class[SelFeatureType],
-                                                                     filenameSampleSubmission: String,
-                                                                     sc: SparkContext, sqlContext: SQLContext) = {
+  def computeEdgeSignatureAppliancesWithVar[SelFeatureType](dfEdgeWindowsTaggingInfo: DataFrame,
+                                                            edgeWindowSize: Int,
+                                                            selectedFeature: String,
+                                                            selectedFeatureType: Class[SelFeatureType],
+                                                            sc: SparkContext, sqlContext: SQLContext) = {
 
 
     if (!(selectedFeatureType.isAssignableFrom(classOf[Map[String, Double]]) || selectedFeatureType.isAssignableFrom(classOf[Double])))
       sys.error("Selected Feature Type must be Double or Map[String,Double]")
 
-    val dfSampleSubmission = sqlContext.read
-      .format("com.databricks.spark.csv")
-      .option("header", "true") // Use first line of all files as header
-      .option("inferSchema", "true") // Automatically infer data types
-      .load(filenameSampleSubmission)
-
-    val dfAppliancesToPredict = dfSampleSubmission.select("Appliance").distinct()
 
     // TODO : implementation of the Variance OVer Complex
     val dfEdgeSignaturesAll =
@@ -555,8 +550,202 @@ object EdgeDetection {
 
     dfEdgeWindowsTaggingInfo.unpersist()
 
-    val dfEdgeSignatures = dfEdgeSignaturesAll.join(dfAppliancesToPredict, dfEdgeSignaturesAll("ApplianceID") === dfAppliancesToPredict("Appliance"))
-      .drop(dfAppliancesToPredict("Appliance"))
+    dfEdgeSignaturesAll
+  }
+
+
+
+
+  def buildStoreDfSimilarityScoreRealFeature(dfFeature: DataFrame,
+                                             dfEdgeSignatures: DataFrame,
+                                             applianceID: Int, selectedFeature: String,
+                                             timestepsNumberPreEdge: Int, timestepsNumberPostEdge: Int,
+                                             downsamplingBinPredictionSize: Int, partitionNumber: Int,
+                                             outputDirName: String,
+                                             sc: SparkContext, sqlContext: SQLContext) = {
+
+    var dateTime = DateTime.now()
+
+    val onSignature: Array[Double] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
+      .head.getAs[mutable.WrappedArray[Double]]("ON_TimeSignature_" + selectedFeature).toArray[Double]
+
+    val offSignature: Array[Double] = dfEdgeSignatures.filter(dfEdgeSignatures("ApplianceID") === (applianceID))
+      .head.getAs[mutable.WrappedArray[Double]]("OFF_TimeSignature_" + selectedFeature).toArray[Double]
+
+    // EVALUATION HL OVER TRAINING SET
+    val dfRealFeatureEdgeScore = computeSimilarityEdgeSignaturesRealFeatureGivenAppliance(dfFeature,
+      selectedFeature,
+      onSignature, offSignature,
+      timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
+      sc, sqlContext).cache()
+
+    // saving dfRealFeatureEdgeScoreApplianceTrain
+    val filenameDfRealFeatureEdgeScore = outputDirName + "/ScoreNoDS_AppID" + applianceID.toString + ".csv"
+    CSVutils.storingSparkCsv(dfRealFeatureEdgeScore, filenameDfRealFeatureEdgeScore)
+
+
+    println("Time for COMPUTING EDGE SIMILARITY for applianceID" + applianceID.toString +
+      ": " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+    println("RESAMPLING SIMILARITY SCORES")
+    dateTime = DateTime.now()
+    val dfRealFeatureEdgeScoreDS = Resampling.edgeScoreDownsampling(dfRealFeatureEdgeScore,
+      selectedFeature, downsamplingBinPredictionSize).cache()
+
+    dfRealFeatureEdgeScore.unpersist()
+
+    println("Time for RESAMPLING SIMILARITY SCORES for applianceID" + applianceID.toString +
+      ": " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+    // saving dfRealFeatureEdgeScoreApplianceTrain DOWNSAMPLED
+    val filenameDfRealFeatureEdgeScoreDS = outputDirName + "/ScoreDS_AppID" + applianceID.toString + ".csv"
+    CSVutils.storingSparkCsv(dfRealFeatureEdgeScoreDS, filenameDfRealFeatureEdgeScoreDS)
+
+
+    dfRealFeatureEdgeScoreDS
+  }
+
+
+
+  def buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS: DataFrame,
+                                           dfGroundTruth: DataFrame,
+                                           dfTaggingInfo: DataFrame,
+                                           thresholdToTestSorted: Array[Double],
+                                           applianceID: Int, selectedFeature: String,
+                                           outputDirName: String) = {
+
+    var dateTime = DateTime.now()
+
+    println("Computing hamming loss for each threshold")
+    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
+      HammingLoss.evaluateHammingLoss(
+        dfRealFeatureEdgeScoreDS,
+        dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
+        "TimestampPrediction", applianceID, threshold, outputDirName)
+    )
+
+    val HLoverThreshold: Array[(Double, Double)] = thresholdToTestSorted.zip(hammingLosses)
+    println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+
+    HLoverThreshold.foreach(x => println(x._1, x._2))
+
+    val applianceName = dfTaggingInfo.filter(dfTaggingInfo("applianceID") === applianceID).head.getAs[String]("ApplianceName")
+    (applianceID, applianceName, HLoverThreshold)
+
+  }
+
+
+
+  def buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS: DataFrame,
+                              dfTaggingInfo: DataFrame,
+                              applianceID: Int,
+                              outputDirName: String) = {
+
+    var dateTime = DateTime.now()
+
+    println("THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED for applianceID" + applianceID.toString)
+    dateTime = DateTime.now()
+
+    println("add ground truth prediction")
+    val onOffWindowsGroundTruth: Array[(Long, Long)] = dfTaggingInfo
+      .filter(dfTaggingInfo("applianceID") === applianceID)
+      .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
+
+    val outputFilename = outputDirName + "/OnOffArrayGroundTruth_AppID" + applianceID.toString + ".txt"
+
+    val stringOnOff: String = onOffWindowsGroundTruth.mkString("\n")
+    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
+
+
+    val dfGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreDS, onOffWindowsGroundTruth,
+      "TimestampPrediction", "GroundTruth")
+
+    println("Time for building dfGroudTruth: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+
+    dfGroundTruth
+
+  }
+
+
+
+
+  def buildPredictionRealFeatureLoopOverAppliances(dfFeature: DataFrame,
+                                                   dfEdgeSignatures: DataFrame, dfTaggingInfo: DataFrame,
+                                                   appliancesArray: Array[Int],
+                                                   selectedFeature: String,
+                                                   timestepsNumberPreEdge: Int, timestepsNumberPostEdge: Int,
+                                                   downsamplingBinPredictionSize: Int,
+                                                   nrThresholdsPerAppliance: Int,
+                                                   partitionNumber: Int,
+                                                   outputDirName: String,
+                                                   sc: SparkContext, sqlContext: SQLContext) = {
+
+    val resultsOverAppliancesTrain: Array[(Int, String, Array[(Double, Double)])] =
+      appliancesArray.map { (applianceID: Int) =>
+
+        val dfRealFeatureEdgeScoreDS = EdgeDetection.buildStoreDfSimilarityScoreRealFeature(dfFeature,
+          dfEdgeSignatures, applianceID, selectedFeature,
+          timestepsNumberPreEdge, timestepsNumberPostEdge,
+          downsamplingBinPredictionSize, partitionNumber,
+          outputDirName, sc, sqlContext)
+
+        val dfGroundTruth = EdgeDetection.buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS,
+          dfTaggingInfo, applianceID, outputDirName).cache()
+
+        println("Selecting threshold to test")
+        val thresholdToTestSortedTrain: Array[Double] = SimilarityScore.extractingThreshold(dfRealFeatureEdgeScoreDS,
+          "DeltaScorePrediction_" + selectedFeature, nrThresholdsPerAppliance)
+
+        val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS,
+          dfGroundTruth, dfTaggingInfo, thresholdToTestSortedTrain, applianceID, selectedFeature, outputDirName)
+
+        dfRealFeatureEdgeScoreDS.unpersist()
+        dfGroundTruth.unpersist()
+
+        resultsApplianceOverThresholds
+
+      }
+    //save resultsOverAppliancesTrain
+    val temp = resultsOverAppliancesTrain.toList
+    val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "/resultsOverAppliances.dat"))
+    store.writeObject(temp)
+    store.close()
+
+    val bestResultOverAppliances =
+      HammingLoss.extractingHLoverThresholdAndAppliances(outputDirName + "/resultsOverAppliances.dat")
+
+    bestResultOverAppliances
+
+  }
+
+
+  def buildStoreDfEdgeSignature[SelFeatureType](selFeatureTypeClass : Class[SelFeatureType],
+                                                dfFeatures: DataFrame, dfTaggingInfo: DataFrame,
+                                                selectedFeature: String,
+                                                timestampIntervalPreEdge: Long,
+                                                timestampIntervalPostEdge: Long,
+                                                edgeWindowSize: Int,
+                                                dfEdgeSignaturesFileName: String,
+                                                sc: SparkContext, sqlContext: SQLContext) = {
+
+    val dfEdgeWindows = EdgeDetection.selectingEdgeWindowsRealFromTagWithTimeIntervalSingleFeature(dfFeatures,
+      dfTaggingInfo,
+      selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,
+      sc, sqlContext)
+
+    val dfEdgeWindowsTaggingInfo: DataFrame = dfEdgeWindows.join(dfTaggingInfo, "IDedge").cache()
+
+    // Computing Edge signature for all the appliances given the feature to use
+    println("COMPUTING EDGE SIGNATURE of a single Feature")
+    val dfEdgeSignatures = EdgeDetection.computeEdgeSignatureAppliancesWithVar(dfEdgeWindowsTaggingInfo,
+      edgeWindowSize, selectedFeature, selFeatureTypeClass,
+      sc, sqlContext).cache()
+
+    dfEdgeWindowsTaggingInfo.unpersist()
+
+    // saving dfEdgeSignature
+    CSVutils.storingSparkCsv(dfEdgeSignatures, dfEdgeSignaturesFileName)
 
     dfEdgeSignatures
   }

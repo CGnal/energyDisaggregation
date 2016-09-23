@@ -59,7 +59,7 @@ object HammingLoss {
         dfEdgeScores, threshold, scoresColName, timeStampColName)
 
     val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
-      applianceID.toString + "_threshold" + threshold.toInt.toString +".txt"
+      applianceID.toString + "_threshold" + (threshold*1E7).toInt.toString +".txt"
 
     val stringOnOff: String = onOffWindows.mkString("\n")
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
@@ -87,7 +87,7 @@ object HammingLoss {
 
 
 
-  def extractingHLoverThresholdAndAppliances(filenameResultsOverAppliances: String) = {
+  def extractingHLoverThresholdAndAppliances(filenameResultsOverAppliances: String): Array[(Int, String, Double, Double)] = {
 
     val reader = new ObjectInputStream(new FileInputStream(filenameResultsOverAppliances))
     val resultsOverAppliances = reader.readObject().asInstanceOf[Array[(Int, String, Array[(Double, Double)])]]
