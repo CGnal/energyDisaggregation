@@ -71,10 +71,11 @@ object Main {
     
     val readingFromFileLabelDfEdgeSignature = 0
 
+
     //------------------------------------------------------------------------------------------------------------------
 
     val timestepsNumberPreEdge= (timestampIntervalPreEdge.toInt/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
-    val timestepsNumberPostEdge = (timestampIntervalPostEdge/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
+    val timestepsNumberPostEdge = (timestampIntervalPostEdge/(downsamplingBinSize * 0.167)).round.toInt - 1 // number of points in the interval
     val edgeWindowSize = timestepsNumberPreEdge + timestepsNumberPostEdge + 1
     val downsamplingBinPredictionSize: Int = 60/(downsamplingBinSize * 0.167).round.toInt
     //------------------------------------------------------------------------------------------------------------------
@@ -191,7 +192,9 @@ object Main {
 
 
     // TEST SET
-    val dirNameTest = ReferencePath.datasetDirPath + house + "/Test" + dayFolderTest
+    val dirNameTest = ReferencePath.datasetDirPath + house + "/Test" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+      "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
+      "_postInt" + timestampIntervalPostEdge.toString
 
     val bestResultOverAppliancesTest = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTest,
       dfEdgeSignatures, dfTaggingInfoTest,
