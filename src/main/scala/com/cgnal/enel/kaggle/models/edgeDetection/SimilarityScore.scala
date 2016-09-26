@@ -5,6 +5,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Collections
 
+import breeze.numerics.abs
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.functions.{avg, max, min, sum}
@@ -198,10 +199,11 @@ object SimilarityScore {
       dfEdgeScores
         .select(scoresColName).agg(max(scoresColName)).head.getAs[Double](0)
 
-    val thresholdsMin: Double =
+/*    val thresholdsMin: Double =
       dfEdgeScores
         .select(scoresColName).agg(min(scoresColName)).head.getAs[Double](0)
-
+*/
+    val thresholdsMin = 0d
 
     val step = BigDecimal((thresholdsMax - thresholdsMin)/nrOfThresholds)
 

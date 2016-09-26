@@ -19,7 +19,7 @@ object CrossValidation {
 
 
 
-  def creatingDfFeatureFixedHouseAndDay(dayFolder: String, house: String,
+  def creatingDfFeatureFixedHouseAndDay(dayFolder: String, house: String, outputDirName: String,
                                         sc: SparkContext, sqlContext: SQLContext,
                                         readingFromFileLabel: Int = 0) = {
 
@@ -29,8 +29,7 @@ object CrossValidation {
     val filenameTimestamp = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
 
 
-    val filenameDfFeaturesSingleDay = ReferencePath.datasetDirPath + house + "/Test" + dayFolder + "/" +
-      "dfFeature.csv"
+    val filenameDfFeaturesSingleDay = outputDirName + "/dfFeature.csv"
 
 
     val dfFeaturesSingleDay = if (readingFromFileLabel == 0) {
@@ -65,15 +64,13 @@ object CrossValidation {
 
 
 
-    def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String,
+    def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String, outputDirName: String,
                                             sc: SparkContext, sqlContext: SQLContext,
                                             readingFromFileLabel: Int = 0) = {
 
       val dirNameDataset = ReferencePath.datasetDirPath + house
 
-
-      val filenameDfFeaturesOverDays = dirNameDataset + "/Train" + dayFolderArray(0) + "_" + dayFolderArray.last + "/" +
-        "dfFeature.csv"
+      val filenameDfFeaturesOverDays = outputDirName + "/dfFeature.csv"
 
       val dfFeaturesOverDays = if (readingFromFileLabel == 0) {
 

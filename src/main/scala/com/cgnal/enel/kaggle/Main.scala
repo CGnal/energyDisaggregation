@@ -44,14 +44,14 @@ object Main {
 
     // PARAMETERS ------------------------------------------------------------------------------------------------------
     // DATASET TRAINING AND TEST SET
-/*    val dayFolderArrayTraining = Array("10_22_1350889201", "10_23_1350975601", "10_24_1351062001")
+    val dayFolderArrayTraining = Array("10_22_1350889201", "10_23_1350975601")
     val dayFolderTest = "10_25_1351148401"
     val house = "H1"
-*/
-    val dayFolderArrayTraining = Array("07_27_1343372401")
+
+/*    val dayFolderArrayTraining = Array("07_27_1343372401")
     val dayFolderTest = "07_26_1343286001"
     val house = "H4"
-
+*/
     val partitionNumber = 4
 
     // MODEL PARAMETERS
@@ -65,7 +65,7 @@ object Main {
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 2
+    val nrThresholdsPerAppliance = 20
 
     val readingFromFileLabelDfIngestion = 0
     
@@ -88,12 +88,13 @@ object Main {
     var dateTime = DateTime.now()
     // TODO inserire ciclo su HOUSE
     // Training set
+    val dirNameTrain = ReferencePath.datasetDirPath + house + "/Train" + dayFolderArrayTraining(0) +
+      "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
+      "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
+      "_postInt" + timestampIntervalPostEdge.toString
+
     val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house,
-      sc, sqlContext, readingFromFileLabelDfIngestion)
-    // Test set
-    val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house,
-      sc, sqlContext, readingFromFileLabelDfIngestion)
-    println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+      dirNameTrain, sc, sqlContext, readingFromFileLabelDfIngestion)
     //------------------------------------------------------------------------------------------------------------------
 
 
@@ -106,21 +107,8 @@ object Main {
     // first diff
     val dfFeatureResampledDiffTrain = Resampling.firstDifference(dfFeatureResampledTrain, selectedFeature, "IDtime")
     val dfFeatureEdgeDetectionTrain = dfFeatureResampledDiffTrain.cache()
-
-    // TEST SET
-    val dfFeatureSmoothedTest = Resampling.movingAverageReal(dfFeatureTest, selectedFeature, averageSmoothingWindowSize)
-    val dfFeatureResampledTest = Resampling.downsampling(dfFeatureSmoothedTest, downsamplingBinSize)
-    // first diff
-    val dfFeatureResampledDiffTest = Resampling.firstDifference(dfFeatureResampledTest, selectedFeature, "IDtime")
-    val dfFeatureEdgeDetectionTest = dfFeatureResampledDiffTest.cache()
-    println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
     //------------------------------------------------------------------------------------------------------------------
 
-
-    val dirNameTrain = ReferencePath.datasetDirPath + house + "/Train" + dayFolderArrayTraining(0) +
-      "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
-    "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
-    "_postInt" + timestampIntervalPostEdge.toString
 
     // 3 EDGE DETECTION ALGORITHM -----------------------------------------------------------------------------------------------------
     println("3. EDGE DETECTION ALGORITHM")
@@ -169,7 +157,7 @@ object Main {
 
     // BUILD PREDICTION AND COMPUTE HAMMING LOSS OVER ALL THE APPLIANCES -----------------------------------------------
     // TRAINING SET
-/*    val bestResultOverAppliancesTrain: Array[(Int, String, SelFeatureType, SelFeatureType)] = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
+    val bestResultOverAppliancesTrain: Array[(Int, String, SelFeatureType, SelFeatureType)] = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
       dfEdgeSignatures, dfTaggingInfoTrain, dfTaggingInfoTrain,
       appliancesTrain,
       selectedFeature,
@@ -186,16 +174,26 @@ object Main {
     val storeTrain = new ObjectOutputStream(new FileOutputStream(dirNameTrain + "/bestResultsOverAppliances.dat"))
     storeTrain.writeObject(temp)
     storeTrain.close()
-*/
+
 
     // TEST SET
-/*    val appliancesTest: Array[Int] = dfAppliancesTrain.join(dfTaggingInfoTest,
-      dfAppliancesTrain("ApplianceID") === dfTaggingInfoTest("Appliance")).select("ApplianceID")
-      .map(row => row.getAs[Int](0)).collect()
-*/
     val dirNameTest = ReferencePath.datasetDirPath + house + "/Test" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
+
+    val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house, dirNameTest,
+      sc, sqlContext, readingFromFileLabelDfIngestion)
+    println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+    val dfFeatureSmoothedTest = Resampling.movingAverageReal(dfFeatureTest, selectedFeature, averageSmoothingWindowSize)
+    val dfFeatureResampledTest = Resampling.downsampling(dfFeatureSmoothedTest, downsamplingBinSize)
+    // first diff
+    val dfFeatureResampledDiffTest = Resampling.firstDifference(dfFeatureResampledTest, selectedFeature, "IDtime")
+    val dfFeatureEdgeDetectionTest = dfFeatureResampledDiffTest.cache()
+    println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+    val appliancesTest: Array[Int] = dfAppliancesTrain.join(dfTaggingInfoTest, "ApplianceID").select("ApplianceID")
+      .map(row => row.getAs[Int](0)).collect()
 
     val bestResultOverAppliancesTest = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTest,
       dfEdgeSignatures,
