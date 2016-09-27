@@ -50,7 +50,7 @@ object HammingLoss {
                            applianceID: Int,
                            threshold: Double,
                            onOffOutputDirName: String
-                         ): Double = {
+                         ) = {
 
     println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with threshold: " + threshold.toString)
 
@@ -73,7 +73,7 @@ object HammingLoss {
     val predictionXORgroundTruth =
       df.withColumn("XOR", (df(groundTruthColName) !== df("prediction")).cast(IntegerType))
 
-    val hammingLoss =
+    val hammingLoss: DataFrame =
       predictionXORgroundTruth
         .agg(sum("XOR"))
 
@@ -87,18 +87,20 @@ object HammingLoss {
 
 
 
-  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[(Double, Double)])]): Array[(Int, String, Double, Double)] = {
+  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[(Double, Double)], Double)]): Array[(Int, String, Double, Double, Double)] = {
 
 
-    val bestResultOverAppliances: Array[(Int, String, Double, Double)] = resultsOverAppliances.map(tuple => {
+    val bestResultOverAppliances: Array[(Int, String, Double, Double, Double)] = resultsOverAppliances.map(tuple => {
       val bestThresholdHL: (Double, Double) = tuple._3.minBy(_._2)
 
-      (tuple._1, tuple._2, bestThresholdHL._1, bestThresholdHL._2)
+      (tuple._1, tuple._2, bestThresholdHL._1, bestThresholdHL._2, tuple._4)
     })
 
     val HLtotal = bestResultOverAppliances.map(tuple => tuple._4).reduce(_+_)/bestResultOverAppliances.length
 
-    println("\n\nTotal HL over appliances: " + HLtotal.toString)
+    val HLalways0Total = bestResultOverAppliances.map(tuple => tuple._5).reduce(_+_)/bestResultOverAppliances.length
+
+    println("\n\nTotal HL over appliances: " + HLtotal.toString + " HL always0Model: " + HLalways0Total.toString)
 
     bestResultOverAppliances
 

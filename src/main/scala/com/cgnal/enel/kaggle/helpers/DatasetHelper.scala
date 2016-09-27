@@ -147,7 +147,7 @@ object DatasetHelper {
       Row(IDandComplexKeys: _*)
     }
 
-    val tableRDD = sc.parallelize(tableScala)
+    val tableRDD: RDD[Row] = sc.parallelize(tableScala)
     val df: DataFrame = sqlContext.createDataFrame(tableRDD, schema)
     df
   }

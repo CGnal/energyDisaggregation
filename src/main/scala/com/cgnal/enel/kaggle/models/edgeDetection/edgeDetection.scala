@@ -3,8 +3,6 @@ package com.cgnal.enel.kaggle.models.edgeDetection
 import java.io.{FileOutputStream, ObjectOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Paths, Files}
-import java.security.Timestamp
-import java.util
 
 import com.cgnal.enel.kaggle.helpers.DatasetHelper
 import com.cgnal.enel.kaggle.utils._
@@ -15,7 +13,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql._
 import org.apache.spark.{SparkContext, SparkConf}
 import org.joda.time.DateTime
-import org.apache.spark.sql.functions.{min,max,abs,avg}
+import org.apache.spark.sql.functions._
 
 import scala.collection
 import scala.collection.{mutable, Map}
@@ -630,14 +628,21 @@ object EdgeDetection {
         "TimestampPrediction", applianceID, threshold, outputDirName)
     )
 
+    val hammingLossFake: DataFrame =
+      dfGroundTruth
+        .agg(sum("GroundTruth"))
+
+    val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfGroundTruth.count().toDouble
+    println("current hamming loss with 0 model: " + HLwhenAlways0.toString)
+
     val HLoverThreshold: Array[(Double, Double)] = thresholdToTestSorted.zip(hammingLosses)
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-    HLoverThreshold.foreach(x => println(x._1, x._2))
+    HLoverThreshold.foreach(x => println(x._1, x._2, HLwhenAlways0))
 
     val applianceName = dfTaggingInfo.filter(dfTaggingInfo("applianceID") === applianceID).head.getAs[String]("ApplianceName")
-    (applianceID, applianceName, HLoverThreshold)
+    (applianceID, applianceName, HLoverThreshold, HLwhenAlways0)
 
   }
 
@@ -686,9 +691,10 @@ object EdgeDetection {
                                                    nrThresholdsPerAppliance: Int,
                                                    partitionNumber: Int,
                                                    outputDirName: String,
-                                                   sc: SparkContext, sqlContext: SQLContext) = {
+                                                   sc: SparkContext, sqlContext: SQLContext):
+  Array[(Int, String, Double, Double, Double)] = {
 
-    val resultsOverAppliances: Array[(Int, String, Array[(Double, Double)])] =
+    val resultsOverAppliances: Array[(Int, String, Array[(Double, Double)], Double)] =
       appliancesArray.map { (applianceID: Int) =>
 
         println("\nAnalyzing appliance: " + applianceID.toString)
@@ -716,9 +722,9 @@ object EdgeDetection {
 
       }
     //save resultsOverAppliancesTrain
-    val temp = resultsOverAppliances.toList
+//    val temp: List[(Int, String, Array[(Double, Double)])] = resultsOverAppliances.toList
     val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "/resultsOverAppliances.dat"))
-    store.writeObject(temp)
+    store.writeObject(resultsOverAppliances)
     store.close()
 
 
@@ -739,6 +745,7 @@ object EdgeDetection {
                                                 dfEdgeSignaturesFileName: String,
                                                 sc: SparkContext, sqlContext: SQLContext) = {
 
+    println("Selecting edge windows for a given feature")
     val dfEdgeWindows = EdgeDetection.selectingEdgeWindowsRealFromTagWithTimeIntervalSingleFeature(dfFeatures,
       dfTaggingInfo,
       selectedFeature, timestampIntervalPreEdge, timestampIntervalPostEdge, edgeWindowSize,

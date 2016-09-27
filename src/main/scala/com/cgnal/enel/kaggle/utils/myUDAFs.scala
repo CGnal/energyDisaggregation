@@ -86,8 +86,8 @@ class AverageOverReal(fieldname: String, arraySize: Int) extends UserDefinedAggr
 
   // This function is called whenever key changes
   def initialize(buffer: MutableAggregationBuffer) = {
-    buffer(0) = Array.fill(arraySize)(0.toDouble) // set sum to zero
-    buffer(1) = 0L // set number of items to 0
+    buffer(0) = Array.fill(arraySize)(0.toDouble) // set sum to zero, accumulator
+    buffer(1) = 0L // set number of items to 0, counter
   }
 
   // Iterate over each entry of a group
@@ -95,23 +95,23 @@ class AverageOverReal(fieldname: String, arraySize: Int) extends UserDefinedAggr
 
     val buffer0Array = buffer.getAs[mutable.WrappedArray[Double]](0)
       .toArray[Double]
-    val buffer1Array = input.getAs[mutable.WrappedArray[Double]](0)
+    val inputArray = input.getAs[mutable.WrappedArray[Double]](0)
       .toArray[Double]
-    val xZipY = buffer0Array.zip(buffer1Array)
-    buffer(0) = xZipY.map(el => el._1 + el._2)
+    val xZipY = buffer0Array.zip(inputArray)
 
-    buffer(1) = buffer.getLong(1) + 1
+    buffer(0) = xZipY.map(el => el._1 + el._2) // Updating the accumulator
+    buffer(1) = buffer.getLong(1) + 1 // Updating the counter
   }
 
   // Merge two partial aggregates
   def merge(buffer1: MutableAggregationBuffer, buffer2: Row) = {
-    val buffer0Array = buffer1.getAs[mutable.WrappedArray[Double]](0)
+    val buffer1Array = buffer1.getAs[mutable.WrappedArray[Double]](0)
       .toArray[Double]
-    val buffer1Array = buffer2.getAs[mutable.WrappedArray[Double]](0)
+    val buffer2Array = buffer2.getAs[mutable.WrappedArray[Double]](0)
       .toArray[Double]
-    val xZipY = buffer0Array.zip(buffer1Array)
-    buffer1(0) = xZipY.map(el => el._1 + el._2)
+    val xZipY = buffer1Array.zip(buffer2Array)
 
+    buffer1(0) = xZipY.map(el => el._1 + el._2)
     buffer1(1) = buffer1.getLong(1) + buffer2.getLong(1)
   }
 
