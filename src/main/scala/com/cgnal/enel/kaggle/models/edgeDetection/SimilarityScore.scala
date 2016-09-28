@@ -98,19 +98,21 @@ object SimilarityScore {
 
   def findOnOffIntervals(
                                   dfEdgeScores: DataFrame,
-                                  absoluteThreshold: Double,
-                                  valuesColName: String,
+                                  absoluteThresholdON: Double,
+                                  absoluteThresholdOFF: Double,
+                                  scoresONcolName: String,
+                                  scoresOFFcolName: String,
                                   timeStampColName: String): Array[(Long, Long)] = {
     //find positive peaks
     val dfPositivePeaks = findPositivePeaks(
-      dfEdgeScores, absoluteThreshold, valuesColName, timeStampColName)
-      .withColumnRenamed(valuesColName, "PositivePeak")
+      dfEdgeScores, absoluteThresholdON, scoresONcolName, timeStampColName)
+      .withColumnRenamed(scoresONcolName, "PositivePeak")
       .sort(timeStampColName)
 
     //find negative peaks
     val dfNegativePeaks = findNegativePeaks(
-      dfEdgeScores, absoluteThreshold, valuesColName, timeStampColName)
-      .withColumnRenamed(valuesColName, "NegativePeak")
+      dfEdgeScores, absoluteThresholdOFF, scoresOFFcolName, timeStampColName)
+      .withColumnRenamed(scoresOFFcolName, "NegativePeak")
       .sort(timeStampColName)
 
     var positivePeaks: Array[(Long, Double)] = dfPositivePeaks.map(row => {
@@ -142,7 +144,7 @@ object SimilarityScore {
 
         val negativePeaksBetweenPositivePeaks =
           negativePeaks.filter(t =>
-            t._1 > timeStampPositivePeakI && t._1 < timeStampPositivePeakIplus1)
+            t._1 >= timeStampPositivePeakI && t._1 < timeStampPositivePeakIplus1)
 
         if (negativePeaksBetweenPositivePeaks.length > 0) {
           OnOffwindows.append((
@@ -192,12 +194,17 @@ object SimilarityScore {
 
 
   def extractingUniformlySpacedThreshold(dfEdgeScores: DataFrame,
-                                         scoresColName: String,
-                                         nrOfThresholds: Int): Array[Double] = {
+                                         scoresONcolName: String,
+                                         scoresOFFcolName: String,
+                                         nrOfThresholds: Int): Array[(Double, Double)] = {
 
-    val thresholdsMax: Double =
+    val thresholdsONmax: Double =
       dfEdgeScores
-        .select(scoresColName).agg(max(scoresColName)).head.getAs[Double](0)
+        .select(scoresONcolName).agg(max(scoresONcolName)).head.getAs[Double](0)
+
+    val thresholdsOFFmax: Double =
+      dfEdgeScores
+        .select(scoresOFFcolName).agg(max(scoresOFFcolName)).head.getAs[Double](0)
 
 /*    val thresholdsMin: Double =
       dfEdgeScores
@@ -205,11 +212,13 @@ object SimilarityScore {
 */
     val thresholdsMin = 0d
 
-    val step = BigDecimal((thresholdsMax - thresholdsMin)/nrOfThresholds)
+    val stepON = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
+    val thresholdSortedON = Range.BigDecimal(thresholdsMin, thresholdsONmax, stepON).map(el => el.toDouble).toArray
 
-    val thresholdSorted = Range.BigDecimal(thresholdsMin, thresholdsMax, step).map(el => el.toDouble).toArray
+    val stepOFF = BigDecimal((thresholdsOFFmax - thresholdsMin)/nrOfThresholds)
+    val thresholdSortedOFF = Range.BigDecimal(thresholdsMin, thresholdsOFFmax, stepOFF).map(el => el.toDouble).toArray
 
-    val thresholdToTestSorted = thresholdSorted.dropRight(1)
+    val thresholdToTestSorted: Array[(Double, Double)] = thresholdSortedON.zip(thresholdSortedOFF).dropRight(1)
 
     thresholdToTestSorted
 

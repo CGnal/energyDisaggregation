@@ -10,7 +10,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.functions.first
 
-import java.io.{FileOutputStream, ObjectOutputStream, FileReader, StringReader}
+import java.io._
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
 
 import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
@@ -45,15 +45,15 @@ object Main {
     // PARAMETERS ------------------------------------------------------------------------------------------------------
     // DATASET TRAINING AND TEST SET
     // The code is built to process data from a single home by splitting on training and test set based on the day
-    val dayFolderArrayTraining = Array("10_22_1350889201", "10_23_1350975601") //folders corresponding to the days used as
+/*    val dayFolderArrayTraining = Array("10_22_1350889201", "10_23_1350975601") //folders corresponding to the days used as
     // training set (it can be an array with more days)
     val dayFolderTest = "10_25_1351148401" // folder corresponding to the day used as test set (it must contain one day)
     val house = "H1"
-
-/*    val dayFolderArrayTraining = Array("07_27_1343372401")
+*/
+    val dayFolderArrayTraining = Array("07_27_1343372401")
     val dayFolderTest = "07_26_1343286001"
     val house = "H4"
-*/
+
     // -----------------------------------------------------------------------------------------------------------------
     val partitionNumber = 4 // set equal to the number of local nodes
 
@@ -69,14 +69,18 @@ object Main {
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 2
+    val nrThresholdsPerAppliance = 20
 
-    val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
+    val readingFromFileLabelDfIngestion = 0  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     // instead of building it from csv
-    val readingFromFileLabelDfEdgeSignature = 1  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
+    val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
     // from filesystem (if previously computed) instead of computing it
 
-    val extraLabelOutputDirName = ""
+    val scoresONcolName = "recipMsdON_TimePrediction_" + selectedFeature
+    val scoresOFFcolName = "recipMsdOFF_TimePrediction_" + selectedFeature
+
+
+    val extraLabelOutputDirName = "recipMSDscore"
 
     //------------------------------------------------------------------------------------------------------------------
     val timestepsNumberPreEdge= (timestampIntervalPreEdge.toInt/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
@@ -96,8 +100,16 @@ object Main {
     val dirNameTest = ReferencePath.datasetDirPath + house + "/Test" + extraLabelOutputDirName + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
+
+    val outputTextFilenameTraining = dirNameTrain + "/outputFileTraining.txt"
+    val outputTextFilenameTest = dirNameTest + "/outputFileTest.txt"
     //------------------------------------------------------------------------------------------------------------------
 
+
+    // SAVING PRINTED OUTPUT TO A FILE
+    // inizializzazione
+    val fileOutputTrain = new File(outputTextFilenameTraining)
+    val bwTrain: BufferedWriter = new BufferedWriter(new FileWriter(fileOutputTrain))
 
 
     // 1 INGESTION -----------------------------------------------------------------------------------------------------
@@ -150,7 +162,10 @@ object Main {
     val dfFeatureResampledTrain = Resampling.downsampling(dfFeatureSmoothedTrain, downsamplingBinSize)
     // first diff
     val dfFeatureResampledDiffTrain = Resampling.firstDifference(dfFeatureResampledTrain, selectedFeature, "IDtime")
-    val dfFeatureEdgeDetectionTrain = dfFeatureResampledTrain//dfFeatureResampledDiffTrain.cache()
+    val dfFeatureEdgeDetectionTrain = dfFeatureResampledDiffTrain.cache()
+
+    // Serialization of the dfFeature actually used
+    CSVutils.storingSparkCsv(dfFeatureEdgeDetectionTrain, dirNameTrain + "/dfFeaturePreProcessed.csv")
     // -----------------------------------------------------------------------------------------------------------------
 
 
@@ -180,19 +195,25 @@ object Main {
     // TRAINING SET
     // build prediction for each appliance in the appliancesTrain array by using nrThresholdsPerAppliance threshold
     // evenly spaced between 0 and the max value founded
+    bwTrain.write("TRAINING SET loop over appliances (and thresholds):")
     val bestResultOverAppliancesTrain = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTrain,
-      dfEdgeSignatures, dfTaggingInfoTrain, dfTaggingInfoTrain,
+      dfEdgeSignatures, dfTaggingInfoTrain,
       appliancesTrain,
       selectedFeature,
       timestepsNumberPreEdge, timestepsNumberPostEdge,
       downsamplingBinPredictionSize,
       nrThresholdsPerAppliance,
       partitionNumber,
-      dirNameTrain,
+      scoresONcolName, scoresOFFcolName,
+      dirNameTrain, bwTrain,
       sc: SparkContext, sqlContext: SQLContext)
+
 
     // printing the best result for each appliance
     bestResultOverAppliancesTrain.foreach(x => println(x))
+    bwTrain.write("\n\nBEST RESULTS OF TRAINING SET (over appliances):")
+    bestResultOverAppliancesTrain.foreach(x => bwTrain.write(x.toString))
+
     // storing the results with the best threshold and relative HL for each appliance
 //    val temp = bestResultOverAppliancesTrain.toList
     val storeTrain = new ObjectOutputStream(new FileOutputStream(dirNameTrain + "/bestResultsOverAppliances.dat"))
@@ -201,6 +222,7 @@ object Main {
 
 
     // TEST SET -------------------------------------------------------------------------------------------------------
+    val bwTest: BufferedWriter = new BufferedWriter(new FileWriter(outputTextFilenameTest))
     if (appliancesTest.length != 0) {
       // from now on the code performs the same operations already done
       // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
@@ -214,24 +236,33 @@ object Main {
       val dfFeatureResampledTest = Resampling.downsampling(dfFeatureSmoothedTest, downsamplingBinSize)
       // first diff
       val dfFeatureResampledDiffTest = Resampling.firstDifference(dfFeatureResampledTest, selectedFeature, "IDtime")
-      val dfFeatureEdgeDetectionTest = dfFeatureResampledTest //dfFeatureResampledDiffTest.cache()
+      val dfFeatureEdgeDetectionTest = dfFeatureResampledDiffTest.cache()
       println("Time for RESAMPLING: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
       // build prediction for each appliance in the appliancesTest array by using nrThresholdsPerAppliance threshold
       // evenly spaced between 0 and the max value founded
+      val outputTextFilenameTest = dirNameTrain + "/outputFileTest.txt"
+
+      val fileOutputTest = new File(outputTextFilenameTest)
+
+      bwTest.write("TEST SET loop over appliances (and thresholds):")
       val bestResultOverAppliancesTest = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTest,
         dfEdgeSignatures,
-        dfTaggingInfoTest, dfTaggingInfoTrain,
+        dfTaggingInfoTest,
         appliancesTest,
         selectedFeature,
         timestepsNumberPreEdge, timestepsNumberPostEdge,
         downsamplingBinPredictionSize,
         nrThresholdsPerAppliance,
         partitionNumber,
-        dirNameTest,
+        scoresONcolName, scoresOFFcolName,
+        dirNameTest, bwTest,
         sc: SparkContext, sqlContext: SQLContext)
       // printing the best result for each appliance
       bestResultOverAppliancesTest.foreach(x => println(x))
+
+      bwTest.write("RESULTS OF TEST SET, bestResultOverAppliances:")
+      bestResultOverAppliancesTest.foreach(x => bwTest.write(x.toString))
 
       // storing the results with the best threshold and relative HL for each appliance
       //    val temp2: List[(Int, String, SelFeatureType, SelFeatureType)] = bestResultOverAppliancesTest.toList
@@ -241,7 +272,12 @@ object Main {
       //------------------------------------------------------------------------------------------------------------------
     }
     else
-      {println("TEST CANNOT BE PERFORM BECAUSE THERE ARE NO AVAILABLE APPLIANCES")}
+      {println("TEST CANNOT BE PERFORM BECAUSE THERE ARE NO AVAILABLE APPLIANCES")
+        bwTest.write("TEST CANNOT BE PERFORM BECAUSE THERE ARE NO AVAILABLE APPLIANCES")}
+
+    //chiusura
+    bwTest.close()
+    bwTrain.close()
   }
 }
 

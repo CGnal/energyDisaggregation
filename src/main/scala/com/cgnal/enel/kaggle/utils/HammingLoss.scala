@@ -45,21 +45,26 @@ object HammingLoss {
                            dfEdgeScores: DataFrame,
                            dfGroundTruth: DataFrame,
                            groundTruthColName: String,
-                           scoresColName: String,
+                           scoresONcolName: String,
+                           scoresOFFcolName: String,
                            timeStampColName: String,
                            applianceID: Int,
-                           threshold: Double,
+                           absolutethresholdON: Double,
+                           absolutethresholdOFF: Double,
                            onOffOutputDirName: String
                          ) = {
 
-    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with threshold: " + threshold.toString)
+    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with thresholdON: " + absolutethresholdON.toString +
+    " thresholdOFF: " + absolutethresholdOFF.toString)
 
     val onOffWindows: Array[(Long, Long)] =
       SimilarityScore.findOnOffIntervals(
-        dfEdgeScores, threshold, scoresColName, timeStampColName)
+        dfEdgeScores, absolutethresholdON, absolutethresholdOFF,
+        scoresONcolName, scoresOFFcolName, timeStampColName)
 
     val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
-      applianceID.toString + "_threshold" + (threshold*1E7).toInt.toString +".txt"
+      applianceID.toString + "_thresholdON" + (absolutethresholdON*1E7).toInt.toString +
+      "_thresholdOFF" + (absolutethresholdOFF*1E7).toInt.toString + ".txt"
 
     val stringOnOff: String = onOffWindows.mkString("\n")
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
@@ -87,18 +92,21 @@ object HammingLoss {
 
 
 
-  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[(Double, Double)], Double)]): Array[(Int, String, Double, Double, Double)] = {
+  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[((Double, Double), Double)], Double)])
+  : Array[(Int, String, Double, Double, Double, Double)] = {
 
+    val bestResultOverAppliances: Array[(Int, String, Double, Double, Double, Double)] = resultsOverAppliances.map(tuple => {
+      val bestThresholdHL: ((Double, Double), Double) = tuple._3.minBy(_._2)
+      val bestThresholdON = bestThresholdHL._1._1
+      val bestThresholdOFF = bestThresholdHL._1._2
+      val bestHL = bestThresholdHL._2
 
-    val bestResultOverAppliances: Array[(Int, String, Double, Double, Double)] = resultsOverAppliances.map(tuple => {
-      val bestThresholdHL: (Double, Double) = tuple._3.minBy(_._2)
-
-      (tuple._1, tuple._2, bestThresholdHL._1, bestThresholdHL._2, tuple._4)
+      (tuple._1, tuple._2, bestThresholdON, bestThresholdOFF, bestHL, tuple._4)
     })
 
-    val HLtotal = bestResultOverAppliances.map(tuple => tuple._4).reduce(_+_)/bestResultOverAppliances.length
+    val HLtotal = bestResultOverAppliances.map(tuple => tuple._5).reduce(_+_)/bestResultOverAppliances.length
 
-    val HLalways0Total = bestResultOverAppliances.map(tuple => tuple._5).reduce(_+_)/bestResultOverAppliances.length
+    val HLalways0Total = bestResultOverAppliances.map(tuple => tuple._6).reduce(_+_)/bestResultOverAppliances.length
 
     println("\n\nTotal HL over appliances: " + HLtotal.toString + " HL always0Model: " + HLalways0Total.toString)
 

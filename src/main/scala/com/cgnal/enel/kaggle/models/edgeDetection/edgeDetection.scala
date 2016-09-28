@@ -1,6 +1,6 @@
 package com.cgnal.enel.kaggle.models.edgeDetection
 
-import java.io.{FileOutputStream, ObjectOutputStream}
+import java.io.{BufferedWriter, FileOutputStream, ObjectOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Paths, Files}
 
@@ -397,8 +397,7 @@ object EdgeDetection {
     // Delta Score in [-2,2]
     val dfFeatureEdgeScoreAppliance = dfFeaturesNormalizedEdgeScoreTemp2.withColumn(
       "DeltaScore_" + selectedFeature, dfFeaturesNormalizedEdgeScoreTemp2("scoreON_Time_" + selectedFeature)
-        - dfFeaturesNormalizedEdgeScoreTemp2("scoreOFF_Time_" + selectedFeature)
-    )
+        - dfFeaturesNormalizedEdgeScoreTemp2("scoreOFF_Time_" + selectedFeature))
 
     dfFeaturesEdgeScore.unpersist()
 
@@ -613,19 +612,22 @@ object EdgeDetection {
 
   def buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS: DataFrame,
                                            dfGroundTruth: DataFrame,
-                                           dfTaggingInfo: DataFrame,
-                                           thresholdToTestSorted: Array[Double],
-                                           applianceID: Int, selectedFeature: String,
-                                           outputDirName: String) = {
+                                           absoluteThresholdToTestSorted: Array[(Double, Double)],
+                                           applianceID: Int, applianceName: String,
+                                           selectedFeature: String,
+                                           outputDirName: String,
+                                           scoresONcolName: String,
+                                           scoresOFFcolName: String,
+                                           bw: BufferedWriter): (Int, String, Array[((Double, Double), Double)], Double) = {
 
     var dateTime = DateTime.now()
 
     println("Computing hamming loss for each threshold")
-    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
+    val hammingLosses: Array[Double] = absoluteThresholdToTestSorted.map(threshold =>
       HammingLoss.evaluateHammingLoss(
         dfRealFeatureEdgeScoreDS,
-        dfGroundTruth, "GroundTruth", "DeltaScorePrediction_" + selectedFeature,
-        "TimestampPrediction", applianceID, threshold, outputDirName)
+        dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
+        "TimestampPrediction", applianceID, threshold._1, threshold._2, outputDirName)
     )
 
     val hammingLossFake: DataFrame =
@@ -635,13 +637,17 @@ object EdgeDetection {
     val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfGroundTruth.count().toDouble
     println("current hamming loss with 0 model: " + HLwhenAlways0.toString)
 
-    val HLoverThreshold: Array[(Double, Double)] = thresholdToTestSorted.zip(hammingLosses)
+    val HLoverThreshold: Array[((Double, Double), Double)] = absoluteThresholdToTestSorted.zip(hammingLosses)
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-    HLoverThreshold.foreach(x => println(x._1, x._2, HLwhenAlways0))
+    HLoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2, HLwhenAlways0))
 
-    val applianceName = dfTaggingInfo.filter(dfTaggingInfo("applianceID") === applianceID).head.getAs[String]("ApplianceName")
+
+    HLoverThreshold.foreach(x => bw.write("applianceID: " + applianceID.toString +
+      ", thresholdON: " + x._1._1.toString + ", thresholdOFF: " + x._1._2.toString +
+      ", HL: " + x._2.toString + ", HL0: " + HLwhenAlways0))
+
     (applianceID, applianceName, HLoverThreshold, HLwhenAlways0)
 
   }
@@ -683,21 +689,28 @@ object EdgeDetection {
 
   def buildPredictionRealFeatureLoopOverAppliances(dfFeature: DataFrame,
                                                    dfEdgeSignatures: DataFrame,
-                                                   dfTaggingInfoCurrent: DataFrame, dfTaggingInfoTrain: DataFrame,
+                                                   dfTaggingInfoCurrent: DataFrame,
                                                    appliancesArray: Array[Int],
                                                    selectedFeature: String,
                                                    timestepsNumberPreEdge: Int, timestepsNumberPostEdge: Int,
                                                    downsamplingBinPredictionSize: Int,
                                                    nrThresholdsPerAppliance: Int,
                                                    partitionNumber: Int,
-                                                   outputDirName: String,
-                                                   sc: SparkContext, sqlContext: SQLContext):
-  Array[(Int, String, Double, Double, Double)] = {
+                                                   scoresONcolName: String,
+                                                   scoresOFFcolName: String,
+                                                   outputDirName: String, bw: BufferedWriter,
+                                                   sc: SparkContext, sqlContext: SQLContext)
+  : Array[(Int, String, Double, Double, Double, Double)] = {
 
-    val resultsOverAppliances: Array[(Int, String, Array[(Double, Double)], Double)] =
+    val resultsOverAppliances: Array[(Int, String, Array[((Double, Double), Double)], Double)] =
       appliancesArray.map { (applianceID: Int) =>
 
-        println("\nAnalyzing appliance: " + applianceID.toString)
+        val applianceName = dfTaggingInfoCurrent.filter(dfTaggingInfoCurrent("applianceID") === applianceID).head.getAs[String]("ApplianceName")
+
+
+        println("\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
+
+        bw.write("\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
 
         val dfRealFeatureEdgeScoreDS = EdgeDetection.buildStoreDfSimilarityScoreRealFeature(dfFeature,
           dfEdgeSignatures, applianceID, selectedFeature,
@@ -709,11 +722,12 @@ object EdgeDetection {
           dfTaggingInfoCurrent, applianceID, outputDirName).cache()
 
         println("Selecting threshold to test")
-        val thresholdToTestSortedTrain: Array[Double] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
-          "DeltaScorePrediction_" + selectedFeature, nrThresholdsPerAppliance)
+        val thresholdToTestSortedTrain: Array[(Double, Double)] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
+          scoresONcolName, scoresOFFcolName, nrThresholdsPerAppliance)
 
         val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS,
-          dfGroundTruth, dfTaggingInfoTrain, thresholdToTestSortedTrain, applianceID, selectedFeature, outputDirName)
+          dfGroundTruth, thresholdToTestSortedTrain, applianceID, applianceName, selectedFeature, outputDirName, scoresONcolName,
+          scoresOFFcolName, bw)
 
         dfRealFeatureEdgeScoreDS.unpersist()
         dfGroundTruth.unpersist()

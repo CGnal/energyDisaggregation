@@ -50,13 +50,18 @@ object Resampling {
     val dfScoreDownsampled: DataFrame = dfIDscoreDownsampling.groupBy("IDscoreDownsampling")
       .agg(min(df("Timestamp")).as("TimestampPrediction"),
         max(df("scoreON_Time_" + selectedFeature)).as("scoreON_TimePrediction_" + selectedFeature),
-        max(df("scoreOFF_Time_" + selectedFeature)).as("scoreOFF_TimePrediction_" + selectedFeature))
+        max(df("scoreOFF_Time_" + selectedFeature)).as("scoreOFF_TimePrediction_" + selectedFeature),
+        min(df("msdON_Time_" + selectedFeature)).as("msdON_TimePrediction_" + selectedFeature),
+        min(df("msdOFF_Time_" + selectedFeature)).as("msdOFF_TimePrediction_" + selectedFeature))
 
     // Delta Score in [-2,2]
     val dfFeatureEdgeScoreAppliancePrediction = dfScoreDownsampled.withColumn(
       "DeltaScorePrediction_" + selectedFeature, dfScoreDownsampled("scoreON_TimePrediction_" + selectedFeature)
-        - dfScoreDownsampled("scoreOFF_TimePrediction_" + selectedFeature)
-    )
+        - dfScoreDownsampled("scoreOFF_TimePrediction_" + selectedFeature))
+      .withColumn("recipMsdON_TimePrediction_" + selectedFeature,
+        myUDF.reciprocalDoubleUDF(dfScoreDownsampled("msdON_TimePrediction_" + selectedFeature)))
+      .withColumn("recipMsdOFF_TimePrediction_" + selectedFeature,
+        myUDF.reciprocalDoubleUDF(dfScoreDownsampled("msdOFF_TimePrediction_" + selectedFeature)))
 
     dfFeatureEdgeScoreAppliancePrediction
   }

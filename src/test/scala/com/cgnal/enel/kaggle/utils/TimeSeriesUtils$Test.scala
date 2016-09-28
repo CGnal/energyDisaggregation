@@ -110,8 +110,7 @@ class TimeSeriesUtils$Test extends FunSuite with BeforeAndAfterAll with BeforeAn
 
     val res = HammingLoss.evaluateHammingLoss(
       df,
-      dfGT, "isOn", "feature", "timeStamp", 1, 15, "prova")
-
+      dfGT, "isOn", "feature", "feature", "timeStamp", 1, 15, 15, "prova")
 
     assert(res === 2d/31)
   }
