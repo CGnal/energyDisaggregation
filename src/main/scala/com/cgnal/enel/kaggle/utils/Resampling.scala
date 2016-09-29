@@ -60,8 +60,8 @@ object Resampling {
         - dfScoreDownsampled("scoreOFF_TimePrediction_" + selectedFeature))
       .withColumn("recipMsdON_TimePrediction_" + selectedFeature,
         myUDF.reciprocalDoubleUDF(dfScoreDownsampled("msdON_TimePrediction_" + selectedFeature)))
-      .withColumn("recipMsdOFF_TimePrediction_" + selectedFeature,
-        myUDF.reciprocalDoubleUDF(dfScoreDownsampled("msdOFF_TimePrediction_" + selectedFeature)))
+      .withColumn("recipNegMsdOFF_TimePrediction_" + selectedFeature,
+        myUDF.reciprocalDoubleUDF(dfScoreDownsampled("msdOFF_TimePrediction_" + selectedFeature))*(-1))
 
     dfFeatureEdgeScoreAppliancePrediction
   }

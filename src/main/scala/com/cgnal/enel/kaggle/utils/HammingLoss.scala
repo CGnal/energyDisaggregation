@@ -18,11 +18,15 @@ object HammingLoss {
                           df: DataFrame,
                           onOffWindows: Array[(Long, Long)],
                           timeStampColName: String,
-                          newColName: String): DataFrame = {
+                          newColName: String,
+                          downsamplingBinPredictionSec: Int,
+                          timestampFactor: Double = 1E7): DataFrame = {
 
     val predictionRanges: Array[Long] =
       onOffWindows.flatMap(tuple => {
-        df.filter(df(timeStampColName) >= tuple._1 && df(timeStampColName) <= tuple._2).select(timeStampColName)
+        df.filter((df(timeStampColName) >= tuple._1 && df(timeStampColName) <= tuple._2) ||
+          (df(timeStampColName) - tuple._1) <= (downsamplingBinPredictionSec/2)*timestampFactor.toInt ||
+          (df(timeStampColName) - tuple._2) <= (downsamplingBinPredictionSec/2)*timestampFactor.toInt).select(timeStampColName)
           .collect()
           .map(rowTime => {
             rowTime.getAs[Long](timeStampColName)
@@ -51,6 +55,7 @@ object HammingLoss {
                            applianceID: Int,
                            absolutethresholdON: Double,
                            absolutethresholdOFF: Double,
+                           downsamplingBinPredictionSec: Int,
                            onOffOutputDirName: String
                          ) = {
 
@@ -71,7 +76,7 @@ object HammingLoss {
 
 
     val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
-      timeStampColName, "prediction")
+      timeStampColName, "prediction", downsamplingBinPredictionSec)
 
     val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer")
 

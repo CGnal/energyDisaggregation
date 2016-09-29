@@ -69,24 +69,25 @@ object Main {
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 20
+    val nrThresholdsPerAppliance = 4
 
-    val readingFromFileLabelDfIngestion = 0  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
+    val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     // instead of building it from csv
-    val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
+    val readingFromFileLabelDfEdgeSignature = 1  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
     // from filesystem (if previously computed) instead of computing it
 
     val scoresONcolName = "recipMsdON_TimePrediction_" + selectedFeature
-    val scoresOFFcolName = "recipMsdOFF_TimePrediction_" + selectedFeature
+    val scoresOFFcolName = "recipNegMsdOFF_TimePrediction_" + selectedFeature
 
 
-    val extraLabelOutputDirName = "recipMSDscore"
+    val extraLabelOutputDirName = "RecipMSDscore"
 
     //------------------------------------------------------------------------------------------------------------------
     val timestepsNumberPreEdge= (timestampIntervalPreEdge.toInt/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
     val timestepsNumberPostEdge = (timestampIntervalPostEdge/(downsamplingBinSize * 0.167)).round.toInt - 1 // number of points in the interval
     val edgeWindowSize = timestepsNumberPreEdge + timestepsNumberPostEdge + 1
-    val downsamplingBinPredictionSize: Int = 60/(downsamplingBinSize * 0.167).round.toInt
+    val downsamplingBinPredictionSec = 60
+    val downsamplingBinPredictionSize: Int = downsamplingBinPredictionSec/(downsamplingBinSize * 0.167).round.toInt
     //------------------------------------------------------------------------------------------------------------------
 
     if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
@@ -108,6 +109,8 @@ object Main {
 
     // SAVING PRINTED OUTPUT TO A FILE
     // inizializzazione
+    val theDirTrain = new File(dirNameTrain)
+    if (!theDirTrain.exists()) theDirTrain.mkdirs()
     val fileOutputTrain = new File(outputTextFilenameTraining)
     val bwTrain: BufferedWriter = new BufferedWriter(new FileWriter(fileOutputTrain))
 
@@ -127,15 +130,20 @@ object Main {
     // Create the dataframe with the Tagging Info from csv
     val dfTaggingInfoTrainTemp = CrossValidation.creatingDfTaggingInfoFixedHouseOverDays(dayFolderArrayTraining, house,
       sc, sqlContext)
-    val dfTaggingInfoTrain = dfTaggingInfoTrainTemp.filter(dfTaggingInfoTrainTemp("ApplianceID")<=38)
+    val dfTaggingInfoTrainTemp2 = dfTaggingInfoTrainTemp.filter(dfTaggingInfoTrainTemp("ApplianceID")<=38)
+    val dfTaggingInfoTrain = dfTaggingInfoTrainTemp2.filter(dfTaggingInfoTrainTemp2("ON_Time") !== dfTaggingInfoTrainTemp2("OFF_Time"))
+      .cache()
+
 
     // TAGGING INFO TEST
     val dfTaggingInfoTestTemp = CrossValidation.creatingDfTaggingInfoFixedHouseAndDay(dayFolderTest, house,
       sc, sqlContext)
-    val dfTaggingInfoTest = dfTaggingInfoTestTemp.filter(dfTaggingInfoTestTemp("ApplianceID")<=38)
-
+    val dfTaggingInfoTestTemp2 = dfTaggingInfoTestTemp.filter(dfTaggingInfoTestTemp("ApplianceID")<=38)
+    val dfTaggingInfoTest = dfTaggingInfoTestTemp2.filter(dfTaggingInfoTestTemp2("ON_Time") !== dfTaggingInfoTestTemp2("OFF_Time"))
+      .cache()
 
     //------------------------------------------------------------------------------------------------------------------
+
     // NUMEROSITY
     // CHECK of the number of appliances and edges founded in the TRAINING SET
     val nrEdgesPerApplianceTrain: Map[Int, Int] = dfTaggingInfoTrain.select("ApplianceID").map(row => row.getAs[Int](0)).collect()
@@ -190,6 +198,7 @@ object Main {
     //------------------------------------------------------------------------------------------------------------------
 
 
+
     //------------------------------------------------------------------------------------------------------------------
     // BUILD PREDICTION AND COMPUTE HAMMING LOSS OVER ALL THE APPLIANCES -----------------------------------------------
     // TRAINING SET
@@ -205,9 +214,10 @@ object Main {
       nrThresholdsPerAppliance,
       partitionNumber,
       scoresONcolName, scoresOFFcolName,
-      dirNameTrain, bwTrain,
+      dirNameTrain, bwTrain, downsamplingBinPredictionSec,
       sc: SparkContext, sqlContext: SQLContext)
 
+    dfTaggingInfoTrain.unpersist()
 
     // printing the best result for each appliance
     bestResultOverAppliancesTrain.foreach(x => println(x))
@@ -222,6 +232,8 @@ object Main {
 
 
     // TEST SET -------------------------------------------------------------------------------------------------------
+    val theDirTest = new File(dirNameTest)
+    if (!theDirTest.exists()) theDirTest.mkdirs()
     val bwTest: BufferedWriter = new BufferedWriter(new FileWriter(outputTextFilenameTest))
     if (appliancesTest.length != 0) {
       // from now on the code performs the same operations already done
@@ -256,13 +268,16 @@ object Main {
         nrThresholdsPerAppliance,
         partitionNumber,
         scoresONcolName, scoresOFFcolName,
-        dirNameTest, bwTest,
+        dirNameTest, bwTest, downsamplingBinPredictionSec,
         sc: SparkContext, sqlContext: SQLContext)
+
+      dfTaggingInfoTest.unpersist()
+
       // printing the best result for each appliance
       bestResultOverAppliancesTest.foreach(x => println(x))
 
       bwTest.write("RESULTS OF TEST SET, bestResultOverAppliances:")
-      bestResultOverAppliancesTest.foreach(x => bwTest.write(x.toString))
+      bestResultOverAppliancesTest.foreach(x => bwTest.write(x.toString + "\n"))
 
       // storing the results with the best threshold and relative HL for each appliance
       //    val temp2: List[(Int, String, SelFeatureType, SelFeatureType)] = bestResultOverAppliancesTest.toList

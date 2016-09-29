@@ -618,6 +618,7 @@ object EdgeDetection {
                                            outputDirName: String,
                                            scoresONcolName: String,
                                            scoresOFFcolName: String,
+                                           downsamplingBinPredictionSec: Int,
                                            bw: BufferedWriter): (Int, String, Array[((Double, Double), Double)], Double) = {
 
     var dateTime = DateTime.now()
@@ -627,7 +628,7 @@ object EdgeDetection {
       HammingLoss.evaluateHammingLoss(
         dfRealFeatureEdgeScoreDS,
         dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
-        "TimestampPrediction", applianceID, threshold._1, threshold._2, outputDirName)
+        "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
     )
 
     val hammingLossFake: DataFrame =
@@ -644,7 +645,7 @@ object EdgeDetection {
     HLoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2, HLwhenAlways0))
 
 
-    HLoverThreshold.foreach(x => bw.write("applianceID: " + applianceID.toString +
+    HLoverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
       ", thresholdON: " + x._1._1.toString + ", thresholdOFF: " + x._1._2.toString +
       ", HL: " + x._2.toString + ", HL0: " + HLwhenAlways0))
 
@@ -657,6 +658,7 @@ object EdgeDetection {
   def buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS: DataFrame,
                               dfTaggingInfo: DataFrame,
                               applianceID: Int,
+                              downsamplingBinPredictionSec: Int,
                               outputDirName: String) = {
 
     var dateTime = DateTime.now()
@@ -676,7 +678,7 @@ object EdgeDetection {
 
 
     val dfGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreDS, onOffWindowsGroundTruth,
-      "TimestampPrediction", "GroundTruth")
+      "TimestampPrediction", "GroundTruth", downsamplingBinPredictionSec)
 
     println("Time for building dfGroudTruth: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
@@ -699,6 +701,7 @@ object EdgeDetection {
                                                    scoresONcolName: String,
                                                    scoresOFFcolName: String,
                                                    outputDirName: String, bw: BufferedWriter,
+                                                   downsamplingBinPredictionSec: Int,
                                                    sc: SparkContext, sqlContext: SQLContext)
   : Array[(Int, String, Double, Double, Double, Double)] = {
 
@@ -710,7 +713,7 @@ object EdgeDetection {
 
         println("\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
 
-        bw.write("\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
+        bw.write("\n\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
 
         val dfRealFeatureEdgeScoreDS = EdgeDetection.buildStoreDfSimilarityScoreRealFeature(dfFeature,
           dfEdgeSignatures, applianceID, selectedFeature,
@@ -719,7 +722,7 @@ object EdgeDetection {
           outputDirName, sc, sqlContext)
 
         val dfGroundTruth = EdgeDetection.buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS,
-          dfTaggingInfoCurrent, applianceID, outputDirName).cache()
+          dfTaggingInfoCurrent, applianceID, downsamplingBinPredictionSec, outputDirName).cache()
 
         println("Selecting threshold to test")
         val thresholdToTestSortedTrain: Array[(Double, Double)] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
@@ -727,7 +730,7 @@ object EdgeDetection {
 
         val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS,
           dfGroundTruth, thresholdToTestSortedTrain, applianceID, applianceName, selectedFeature, outputDirName, scoresONcolName,
-          scoresOFFcolName, bw)
+          scoresOFFcolName, downsamplingBinPredictionSec, bw)
 
         dfRealFeatureEdgeScoreDS.unpersist()
         dfGroundTruth.unpersist()

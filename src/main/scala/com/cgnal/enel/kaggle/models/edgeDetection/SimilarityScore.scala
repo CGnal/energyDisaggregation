@@ -202,9 +202,9 @@ object SimilarityScore {
       dfEdgeScores
         .select(scoresONcolName).agg(max(scoresONcolName)).head.getAs[Double](0)
 
-    val thresholdsOFFmax: Double =
+    val thresholdsOFFmin: Double =
       dfEdgeScores
-        .select(scoresOFFcolName).agg(max(scoresOFFcolName)).head.getAs[Double](0)
+        .select(scoresOFFcolName).agg(min(scoresOFFcolName)).head.getAs[Double](0)
 
 /*    val thresholdsMin: Double =
       dfEdgeScores
@@ -212,13 +212,17 @@ object SimilarityScore {
 */
     val thresholdsMin = 0d
 
-    val stepON = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
+    val stepONtime = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
+    val stepONepsilon = stepONtime/100
+    val stepON = stepONtime - stepONepsilon
     val thresholdSortedON = Range.BigDecimal(thresholdsMin, thresholdsONmax, stepON).map(el => el.toDouble).toArray
 
-    val stepOFF = BigDecimal((thresholdsOFFmax - thresholdsMin)/nrOfThresholds)
-    val thresholdSortedOFF = Range.BigDecimal(thresholdsMin, thresholdsOFFmax, stepOFF).map(el => el.toDouble).toArray
+    val stepOFFtime = BigDecimal((thresholdsOFFmin - thresholdsMin)/nrOfThresholds)
+    val stepOFFepsilon = stepOFFtime/100
+    val stepOFF = stepOFFtime - stepOFFepsilon
+    val thresholdSortedOFF = Range.BigDecimal(thresholdsMin, thresholdsOFFmin, stepOFF).map(el => el.toDouble).toArray
 
-    val thresholdToTestSorted: Array[(Double, Double)] = thresholdSortedON.zip(thresholdSortedOFF).dropRight(1)
+    val thresholdToTestSorted: Array[(Double, Double)] = thresholdSortedON.zip(thresholdSortedOFF)
 
     thresholdToTestSorted
 

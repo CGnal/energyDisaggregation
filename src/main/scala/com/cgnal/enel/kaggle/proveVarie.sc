@@ -36,4 +36,4 @@ val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleVa
 
 val thresholdToTestSorted = thresholdToTestArray.take(3).sorted
 
-0/3d
+1/2d
