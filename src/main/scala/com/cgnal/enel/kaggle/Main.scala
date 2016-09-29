@@ -148,7 +148,7 @@ object Main {
     // CHECK of the number of appliances and edges founded in the TRAINING SET
     val nrEdgesPerApplianceTrain: Map[Int, Int] = dfTaggingInfoTrain.select("ApplianceID").map(row => row.getAs[Int](0)).collect()
       .groupBy(identity).map({case(x,y) => (x,y.size)})
-    val appliancesTrain = nrEdgesPerApplianceTrain.keySet.toArray
+    val appliancesTrain = nrEdgesPerApplianceTrain.keySet.toArray.sorted
     println("Number of appliances in the training set: " + appliancesTrain.length.toString)
     nrEdgesPerApplianceTrain.foreach({case(x,y) => println("ApplianceID: " + x.toString + " number of ON/OFF events in the training set: " + y.toString)})
 
@@ -156,7 +156,7 @@ object Main {
     val nrEdgesPerApplianceTest: Map[Int, Int] = dfTaggingInfoTest.filter(dfTaggingInfoTest("ApplianceID").isin(appliancesTrain:_*))
       .select("ApplianceID").map(row => row.getAs[Int](0)).collect()
       .groupBy(identity).map({case(x,y) => (x,y.size)})
-    val appliancesTest = nrEdgesPerApplianceTest.keySet.toArray
+    val appliancesTest = nrEdgesPerApplianceTest.keySet.toArray.sorted
     println("\n\nNumber of appliances in the test (and in the training) set: " + appliancesTest.length.toString)
     nrEdgesPerApplianceTest.foreach({case(x,y) => println("ApplianceID: " + x.toString + " number of ON/OFF events in the test set: " + y.toString)})
 
@@ -222,7 +222,7 @@ object Main {
     // printing the best result for each appliance
     bestResultOverAppliancesTrain.foreach(x => println(x))
     bwTrain.write("\n\nBEST RESULTS OF TRAINING SET (over appliances):")
-    bestResultOverAppliancesTrain.foreach(x => bwTrain.write(x.toString))
+    bestResultOverAppliancesTrain.foreach(x => bwTrain.write(x.toString + "\n"))
 
     // storing the results with the best threshold and relative HL for each appliance
 //    val temp = bestResultOverAppliancesTrain.toList

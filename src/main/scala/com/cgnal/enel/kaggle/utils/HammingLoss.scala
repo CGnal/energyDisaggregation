@@ -25,8 +25,9 @@ object HammingLoss {
     val predictionRanges: Array[Long] =
       onOffWindows.flatMap(tuple => {
         df.filter((df(timeStampColName) >= tuple._1 && df(timeStampColName) <= tuple._2) ||
-          (df(timeStampColName) - tuple._1) <= (downsamplingBinPredictionSec/2)*timestampFactor.toInt ||
-          (df(timeStampColName) - tuple._2) <= (downsamplingBinPredictionSec/2)*timestampFactor.toInt).select(timeStampColName)
+          abs(df(timeStampColName) - tuple._1) < downsamplingBinPredictionSec*timestampFactor.toInt &&
+            abs(df(timeStampColName) - tuple._2) < downsamplingBinPredictionSec*timestampFactor.toInt)
+            .select(timeStampColName)
           .collect()
           .map(rowTime => {
             rowTime.getAs[Long](timeStampColName)
@@ -68,8 +69,7 @@ object HammingLoss {
         scoresONcolName, scoresOFFcolName, timeStampColName)
 
     val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
-      applianceID.toString + "_thresholdON" + (absolutethresholdON*1E7).toInt.toString +
-      "_thresholdOFF" + (absolutethresholdOFF*1E7).toInt.toString + ".txt"
+      applianceID.toString + "_thresholdON" + (absolutethresholdON*1E7).toInt.toString + ".txt"
 
     val stringOnOff: String = onOffWindows.mkString("\n")
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
