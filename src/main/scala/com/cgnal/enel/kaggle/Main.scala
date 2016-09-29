@@ -63,7 +63,7 @@ object Main {
     type SelFeatureType = Double
 
     val averageSmoothingWindowSize = 6 // number of timestamps, unit: [167ms]
-    val downsamplingBinSize = 6 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
+    val downsamplingBinSize = 1 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
 
 
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
@@ -87,7 +87,7 @@ object Main {
     val timestepsNumberPostEdge = (timestampIntervalPostEdge/(downsamplingBinSize * 0.167)).round.toInt - 1 // number of points in the interval
     val edgeWindowSize = timestepsNumberPreEdge + timestepsNumberPostEdge + 1
     val downsamplingBinPredictionSec = 60
-    val downsamplingBinPredictionSize: Int = downsamplingBinPredictionSec/(downsamplingBinSize * 0.167).round.toInt
+    val downsamplingBinPredictionSize: Int = (downsamplingBinPredictionSec/(downsamplingBinSize * 0.167)).round.toInt
     //------------------------------------------------------------------------------------------------------------------
 
     if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
@@ -196,7 +196,6 @@ object Main {
         sqlContext.read.avro(dfEdgeSignaturesFileName + ".avro").cache()
       }
     //------------------------------------------------------------------------------------------------------------------
-
 
 
     //------------------------------------------------------------------------------------------------------------------

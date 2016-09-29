@@ -212,6 +212,7 @@ object SimilarityScore {
 */
     val thresholdsMin = 0d
 
+    val gardena: Double = (thresholdsONmax - thresholdsMin)/nrOfThresholds
     val stepONtime = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
     val stepONepsilon = stepONtime/100
     val stepON = stepONtime - stepONepsilon

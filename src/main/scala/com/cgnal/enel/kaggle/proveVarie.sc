@@ -35,5 +35,5 @@ Collections.shuffle(thresholdToTest)
 val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleValue)(breakOut).toArray
 
 val thresholdToTestSorted = thresholdToTestArray.take(3).sorted
-
-1/2d
+val troia: Int = 1
+troia/2d

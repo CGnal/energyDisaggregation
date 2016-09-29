@@ -7,7 +7,7 @@ import org.apache.spark.sql.functions._
   */
 object myUDF {
 
-  val reciprocalDouble: (Double) => Double = ((x: Double) => 1/x)
+  val reciprocalDouble: (Double) => Double = ((x: Double) => 1/(x+1E-2))
   val reciprocalDoubleUDF = udf(reciprocalDouble)
 
 }
