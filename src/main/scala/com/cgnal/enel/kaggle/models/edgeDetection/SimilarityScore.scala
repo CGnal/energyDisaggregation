@@ -24,16 +24,18 @@ object SimilarityScore {
     * Finds positive peaks on a timeSeries (implements the homonym in Matlab)
     *
     * @param df
-    * @param absoluteThreshold
+    * @param thresholdPositive
     * @param seriesColName
     * @param timeStampColName
     * @return
     */
   private def findPositivePeaks(
                                  df: DataFrame,
-                                 absoluteThreshold: Double,
+                                 thresholdPositive: Double,
                                  seriesColName: String,
                                  timeStampColName: String): DataFrame = {
+
+    if (thresholdPositive < 0) sys.error("thresholdPositive must be positive")
 
     val w: WindowSpec = Window
       .orderBy("IDscoreDownsampling")
@@ -54,7 +56,7 @@ object SimilarityScore {
       .filter(df3(seriesColName + "_localMax") !== df3(seriesColName + "_localAvg"))
       .select(timeStampColName, seriesColName)
 
-    df4.filter(df4(seriesColName)>absoluteThreshold)
+    df4.filter(df4(seriesColName) >= thresholdPositive)
 
   }
 
@@ -62,16 +64,18 @@ object SimilarityScore {
     * Finds negative peaks on a timeSeries (implements the homonym in Matlab)
     *
     * @param df
-    * @param absoluteThreshold
+    * @param thresholdNegative
     * @param seriesColName
     * @param timeStampColName
     * @return
     */
   private def findNegativePeaks(
                                  df: DataFrame,
-                                 absoluteThreshold: Double,
+                                 thresholdNegative: Double,
                                  seriesColName: String,
                                  timeStampColName: String): DataFrame = {
+
+    if (thresholdNegative > 0) sys.error("thresholdNegative must be negative")
 
     val w = Window
       .orderBy("IDscoreDownsampling")
@@ -92,26 +96,26 @@ object SimilarityScore {
       .filter(df3(seriesColName + "_localMin") !== df3(seriesColName + "_localAvg"))
       .select(timeStampColName, seriesColName)
 
-    df4.filter(df4(seriesColName)<absoluteThreshold)
+    df4.filter(df4(seriesColName) <= thresholdNegative)
   }
 
 
   def findOnOffIntervals(
-                                  dfEdgeScores: DataFrame,
-                                  absoluteThresholdON: Double,
-                                  absoluteThresholdOFF: Double,
-                                  scoresONcolName: String,
-                                  scoresOFFcolName: String,
-                                  timeStampColName: String): Array[(Long, Long)] = {
+                          dfEdgeScores: DataFrame,
+                          thresholdONpositive: Double,
+                          thresholdOFFnegative: Double,
+                          scoresONcolName: String,
+                          scoresOFFcolName: String,
+                          timeStampColName: String): Array[(Long, Long)] = {
     //find positive peaks
     val dfPositivePeaks = findPositivePeaks(
-      dfEdgeScores, absoluteThresholdON, scoresONcolName, timeStampColName)
+      dfEdgeScores, thresholdONpositive, scoresONcolName, timeStampColName)
       .withColumnRenamed(scoresONcolName, "PositivePeak")
       .sort(timeStampColName)
 
     //find negative peaks
     val dfNegativePeaks = findNegativePeaks(
-      dfEdgeScores, absoluteThresholdOFF, scoresOFFcolName, timeStampColName)
+      dfEdgeScores, thresholdOFFnegative, scoresOFFcolName, timeStampColName)
       .withColumnRenamed(scoresOFFcolName, "NegativePeak")
       .sort(timeStampColName)
 
@@ -212,7 +216,6 @@ object SimilarityScore {
 */
     val thresholdsMin = 0d
 
-    val gardena: Double = (thresholdsONmax - thresholdsMin)/nrOfThresholds
     val stepONtime = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
     val stepONepsilon = stepONtime/100
     val stepON = stepONtime - stepONepsilon

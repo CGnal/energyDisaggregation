@@ -86,30 +86,41 @@ object Main {
     val timestepsNumberPreEdge= (timestampIntervalPreEdge.toInt/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
     val timestepsNumberPostEdge = (timestampIntervalPostEdge/(downsamplingBinSize * 0.167)).round.toInt - 1 // number of points in the interval
     val edgeWindowSize = timestepsNumberPreEdge + timestepsNumberPostEdge + 1
-    val downsamplingBinPredictionSec = 60
+    val downsamplingBinPredictionSec = 5
     val downsamplingBinPredictionSize: Int = (downsamplingBinPredictionSec/(downsamplingBinSize * 0.167)).round.toInt
     //------------------------------------------------------------------------------------------------------------------
 
     if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
 
     // OUTPUT DIR NAME -------------------------------------------------------------------------------------------------
-    val dirNameTrain = ReferencePath.datasetDirPath + house + "/Train"+ extraLabelOutputDirName + dayFolderArrayTraining(0) +
+    val dirNameFeatureTrain = ReferencePath.datasetDirPath + house + "/dfFeatureTrain" + dayFolderArrayTraining(0) +
       "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
-    val dirNameTest = ReferencePath.datasetDirPath + house + "/Test" + extraLabelOutputDirName + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+    val dirNameFeatureTest = ReferencePath.datasetDirPath + house + "/dfFeatureTest" + dayFolderTest +
+      "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
-    val outputTextFilenameTraining = dirNameTrain + "/outputFileTraining.txt"
-    val outputTextFilenameTest = dirNameTest + "/outputFileTest.txt"
+
+    val dirNameResultsTrain = ReferencePath.datasetDirPath + house + "/ResultsTrain"+ extraLabelOutputDirName + dayFolderArrayTraining(0) +
+      "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
+      "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
+      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec
+
+    val dirNameResultsTest = ReferencePath.datasetDirPath + house + "/ResultsTest" + extraLabelOutputDirName + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+      "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
+      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec
+
+    val outputTextFilenameTraining = dirNameResultsTrain + "/outputFileTraining.txt"
+    val outputTextFilenameTest = dirNameResultsTest + "/outputFileTest.txt"
     //------------------------------------------------------------------------------------------------------------------
 
 
     // SAVING PRINTED OUTPUT TO A FILE
     // inizializzazione
-    val theDirTrain = new File(dirNameTrain)
+    val theDirTrain = new File(dirNameResultsTrain)
     if (!theDirTrain.exists()) theDirTrain.mkdirs()
     val fileOutputTrain = new File(outputTextFilenameTraining)
     val bwTrain: BufferedWriter = new BufferedWriter(new FileWriter(fileOutputTrain))
@@ -122,7 +133,7 @@ object Main {
     // Training set
     // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
     val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house,
-      dirNameTrain, sc, sqlContext, readingFromFileLabelDfIngestion)
+      dirNameFeatureTrain, sc, sqlContext, readingFromFileLabelDfIngestion)
     // -----------------------------------------------------------------------------------------------------------------
 
 
@@ -173,7 +184,7 @@ object Main {
     val dfFeatureEdgeDetectionTrain = dfFeatureResampledDiffTrain.cache()
 
     // Serialization of the dfFeature actually used
-    CSVutils.storingSparkCsv(dfFeatureEdgeDetectionTrain, dirNameTrain + "/dfFeaturePreProcessed.csv")
+    CSVutils.storingSparkCsv(dfFeatureEdgeDetectionTrain, dirNameFeatureTrain + "/dfFeaturePreProcessed.csv")
     // -----------------------------------------------------------------------------------------------------------------
 
 
@@ -182,7 +193,7 @@ object Main {
     dateTime = DateTime.now()
 
 
-    val dfEdgeSignaturesFileName = dirNameTrain + "/onoff_EdgeSignature"
+    val dfEdgeSignaturesFileName = dirNameFeatureTrain + "/onoff_EdgeSignature"
     // Compute edge signature relative to a single (real) feature (for all the appliances)
     // (or read it from filesystem depending on the flag readingFromFileLabelDfEdgeSignature)
     val dfEdgeSignatures =
@@ -213,7 +224,7 @@ object Main {
       nrThresholdsPerAppliance,
       partitionNumber,
       scoresONcolName, scoresOFFcolName,
-      dirNameTrain, bwTrain, downsamplingBinPredictionSec,
+      dirNameResultsTrain, bwTrain, downsamplingBinPredictionSec,
       sc: SparkContext, sqlContext: SQLContext)
 
     dfTaggingInfoTrain.unpersist()
@@ -225,19 +236,19 @@ object Main {
 
     // storing the results with the best threshold and relative HL for each appliance
 //    val temp = bestResultOverAppliancesTrain.toList
-    val storeTrain = new ObjectOutputStream(new FileOutputStream(dirNameTrain + "/bestResultsOverAppliances.dat"))
+    val storeTrain = new ObjectOutputStream(new FileOutputStream(dirNameResultsTrain + "/bestResultsOverAppliances.dat"))
     storeTrain.writeObject(bestResultOverAppliancesTrain)
     storeTrain.close()
 
 
     // TEST SET -------------------------------------------------------------------------------------------------------
-    val theDirTest = new File(dirNameTest)
+    val theDirTest = new File(dirNameResultsTest)
     if (!theDirTest.exists()) theDirTest.mkdirs()
     val bwTest: BufferedWriter = new BufferedWriter(new FileWriter(outputTextFilenameTest))
     if (appliancesTest.length != 0) {
       // from now on the code performs the same operations already done
       // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
-      val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house, dirNameTest,
+      val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house, dirNameFeatureTest,
         sc, sqlContext, readingFromFileLabelDfIngestion)
       println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
@@ -252,7 +263,7 @@ object Main {
 
       // build prediction for each appliance in the appliancesTest array by using nrThresholdsPerAppliance threshold
       // evenly spaced between 0 and the max value founded
-      val outputTextFilenameTest = dirNameTrain + "/outputFileTest.txt"
+      val outputTextFilenameTest = dirNameResultsTrain + "/outputFileTest.txt"
 
       val fileOutputTest = new File(outputTextFilenameTest)
 
@@ -267,7 +278,7 @@ object Main {
         nrThresholdsPerAppliance,
         partitionNumber,
         scoresONcolName, scoresOFFcolName,
-        dirNameTest, bwTest, downsamplingBinPredictionSec,
+        dirNameResultsTest, bwTest, downsamplingBinPredictionSec,
         sc: SparkContext, sqlContext: SQLContext)
 
       dfTaggingInfoTest.unpersist()
@@ -280,7 +291,7 @@ object Main {
 
       // storing the results with the best threshold and relative HL for each appliance
       //    val temp2: List[(Int, String, SelFeatureType, SelFeatureType)] = bestResultOverAppliancesTest.toList
-      val storeTest = new ObjectOutputStream(new FileOutputStream(dirNameTest + "/bestResultsOverAppliances.dat"))
+      val storeTest = new ObjectOutputStream(new FileOutputStream(dirNameResultsTest + "/bestResultsOverAppliances.dat"))
       storeTest.writeObject(bestResultOverAppliancesTest)
       storeTest.close()
       //------------------------------------------------------------------------------------------------------------------

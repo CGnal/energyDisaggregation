@@ -64,13 +64,13 @@ object CrossValidation {
 
 
 
-    def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String, outputDirName: String,
+    def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String, dfFeatureDirName: String,
                                             sc: SparkContext, sqlContext: SQLContext,
                                             readingFromFileLabel: Int = 0) = {
 
       val dirNameDataset = ReferencePath.datasetDirPath + house
 
-      val filenameDfFeaturesOverDays = outputDirName + "/dfFeature.csv"
+      val filenameDfFeaturesOverDays = dfFeatureDirName + "/dfFeature.csv"
 
       val dfFeaturesOverDays = if (readingFromFileLabel == 0) {
 

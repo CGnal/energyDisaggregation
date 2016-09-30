@@ -612,7 +612,7 @@ object EdgeDetection {
 
   def buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS: DataFrame,
                                            dfGroundTruth: DataFrame,
-                                           absoluteThresholdToTestSorted: Array[(Double, Double)],
+                                           thresholdToTestSorted: Array[(Double, Double)],
                                            applianceID: Int, applianceName: String,
                                            selectedFeature: String,
                                            outputDirName: String,
@@ -624,7 +624,7 @@ object EdgeDetection {
     var dateTime = DateTime.now()
 
     println("Computing hamming loss for each threshold")
-    val hammingLosses: Array[Double] = absoluteThresholdToTestSorted.map(threshold =>
+    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
       HammingLoss.evaluateHammingLoss(
         dfRealFeatureEdgeScoreDS,
         dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
@@ -638,7 +638,7 @@ object EdgeDetection {
     val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfGroundTruth.count().toDouble
     println("current hamming loss with 0 model: " + HLwhenAlways0.toString)
 
-    val HLoverThreshold: Array[((Double, Double), Double)] = absoluteThresholdToTestSorted.zip(hammingLosses)
+    val HLoverThreshold: Array[((Double, Double), Double)] = thresholdToTestSorted.zip(hammingLosses)
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 

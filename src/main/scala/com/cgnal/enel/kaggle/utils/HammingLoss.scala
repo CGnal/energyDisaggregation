@@ -54,22 +54,22 @@ object HammingLoss {
                            scoresOFFcolName: String,
                            timeStampColName: String,
                            applianceID: Int,
-                           absolutethresholdON: Double,
+                           thresholdON: Double,
                            absolutethresholdOFF: Double,
                            downsamplingBinPredictionSec: Int,
                            onOffOutputDirName: String
                          ) = {
 
-    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with thresholdON: " + absolutethresholdON.toString +
+    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with thresholdON: " + thresholdON.toString +
     " thresholdOFF: " + absolutethresholdOFF.toString)
 
     val onOffWindows: Array[(Long, Long)] =
       SimilarityScore.findOnOffIntervals(
-        dfEdgeScores, absolutethresholdON, absolutethresholdOFF,
+        dfEdgeScores, thresholdON, absolutethresholdOFF,
         scoresONcolName, scoresOFFcolName, timeStampColName)
 
     val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
-      applianceID.toString + "_thresholdON" + (absolutethresholdON*1E7).toInt.toString + ".txt"
+      applianceID.toString + "_thresholdON" + (thresholdON*1E7).toInt.toString + ".txt"
 
     val stringOnOff: String = onOffWindows.mkString("\n")
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
