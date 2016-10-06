@@ -68,7 +68,7 @@ object Main {
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 9
+    val nrThresholdsPerAppliance = 19
 
     val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     // instead of building it from csv

@@ -650,7 +650,7 @@ object EdgeDetection {
           dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
           "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
         PerfoverThresholdBuffer.append((threshold, performances))
-        if (performances._1 == HLwhenAlways0) break // break out of the for loop
+        if (performances._1 == HLwhenAlways0 || performances._2 == 0d) break // break out of the for loop
       }
     }
 
