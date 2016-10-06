@@ -65,11 +65,10 @@ object Main {
     val averageSmoothingWindowSize = 6 // number of timestamps, unit: [167ms]
     val downsamplingBinSize = 1 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
 
-
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 4
+    val nrThresholdsPerAppliance = 9
 
     val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     // instead of building it from csv
@@ -80,13 +79,13 @@ object Main {
     val scoresOFFcolName = "recipNegMsdOFF_TimePrediction_" + selectedFeature
 
 
-    val extraLabelOutputDirName = "RecipMSDscore"
+    val extraLabelOutputDirName = "RecipMSD"
 
     //------------------------------------------------------------------------------------------------------------------
     val timestepsNumberPreEdge= (timestampIntervalPreEdge.toInt/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
     val timestepsNumberPostEdge = (timestampIntervalPostEdge/(downsamplingBinSize * 0.167)).round.toInt - 1 // number of points in the interval
     val edgeWindowSize = timestepsNumberPreEdge + timestepsNumberPostEdge + 1
-    val downsamplingBinPredictionSec = 5
+    val downsamplingBinPredictionSec = 60
     val downsamplingBinPredictionSize: Int = (downsamplingBinPredictionSec/(downsamplingBinSize * 0.167)).round.toInt
     //------------------------------------------------------------------------------------------------------------------
 
@@ -107,11 +106,11 @@ object Main {
     val dirNameResultsTrain = ReferencePath.datasetDirPath + house + "/ResultsTrain"+ extraLabelOutputDirName + dayFolderArrayTraining(0) +
       "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
-      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec
+      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
 
     val dirNameResultsTest = ReferencePath.datasetDirPath + house + "/ResultsTest" + extraLabelOutputDirName + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
-      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec
+      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
 
     val outputTextFilenameTraining = dirNameResultsTrain + "/outputFileTraining.txt"
     val outputTextFilenameTest = dirNameResultsTest + "/outputFileTest.txt"
@@ -230,6 +229,7 @@ object Main {
     dfTaggingInfoTrain.unpersist()
 
     // printing the best result for each appliance
+    //(applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model)
     bestResultOverAppliancesTrain.foreach(x => println(x))
     bwTrain.write("\n\nBEST RESULTS OF TRAINING SET (over appliances):")
     bestResultOverAppliancesTrain.foreach(x => bwTrain.write(x.toString + "\n"))
@@ -240,6 +240,19 @@ object Main {
     storeTrain.writeObject(bestResultOverAppliancesTrain)
     storeTrain.close()
 
+    // STORING A CSV WITH RESULTS
+    val storeTrainCSV = new PrintWriter(new File(dirNameResultsTest + "/bestResultsOverAppliances.csv"))
+    storeTrainCSV.println("applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model")
+    bestResultOverAppliancesTrain.foreach(tuple => storeTrainCSV.println(tuple._1 + "," +
+      tuple._2 + "," +
+      tuple._3 + "," +
+      tuple._4 + "," +
+      tuple._5 + "," +
+      tuple._6 + "," +
+      tuple._7 + "," +
+      tuple._8 + "," +
+      tuple._9))
+    storeTrainCSV.close()
 
     // TEST SET -------------------------------------------------------------------------------------------------------
     val theDirTest = new File(dirNameResultsTest)
@@ -294,6 +307,20 @@ object Main {
       val storeTest = new ObjectOutputStream(new FileOutputStream(dirNameResultsTest + "/bestResultsOverAppliances.dat"))
       storeTest.writeObject(bestResultOverAppliancesTest)
       storeTest.close()
+
+      // STORING A CSV WITH RESULTS
+      val storeTestCSV = new PrintWriter(new File(dirNameResultsTest + "/bestResultsOverAppliances.csv"))
+      storeTestCSV.println("applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model")
+      bestResultOverAppliancesTest.foreach(tuple => storeTestCSV.println(tuple._1 + "," +
+        tuple._2 + "," +
+        tuple._3 + "," +
+        tuple._4 + "," +
+        tuple._5 + "," +
+        tuple._6 + "," +
+        tuple._7 + "," +
+        tuple._8 + "," +
+        tuple._9))
+      storeTestCSV.close()
       //------------------------------------------------------------------------------------------------------------------
     }
     else

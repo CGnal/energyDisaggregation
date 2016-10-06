@@ -106,7 +106,7 @@ class TimeSeriesUtils$Test extends FunSuite with BeforeAndAfterAll with BeforeAn
 
 
 
-  test("Hamming Loss") {
+/*  test("Hamming Loss") {
 
     val res = HammingLoss.evaluateHammingLoss(
       df,
@@ -114,6 +114,7 @@ class TimeSeriesUtils$Test extends FunSuite with BeforeAndAfterAll with BeforeAn
 
     assert(res === 2d/31)
   }
+  */
 }
 
 object TimeSeriesUtils$Test {

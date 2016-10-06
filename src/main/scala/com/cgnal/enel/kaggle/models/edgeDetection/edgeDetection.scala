@@ -16,9 +16,11 @@ import org.joda.time.DateTime
 import org.apache.spark.sql.functions._
 
 import scala.collection
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{mutable, Map}
 import scala.reflect.ClassTag
 import com.databricks.spark.avro._
+import scala.util.control.Breaks._
 
 import scala.reflect.io.Path
 import scala.util.{Failure, Success, Try}
@@ -619,17 +621,9 @@ object EdgeDetection {
                                            scoresONcolName: String,
                                            scoresOFFcolName: String,
                                            downsamplingBinPredictionSec: Int,
-                                           bw: BufferedWriter): (Int, String, Array[((Double, Double), Double)], Double) = {
+                                           bw: BufferedWriter) = {
 
     var dateTime = DateTime.now()
-
-    println("Computing hamming loss for each threshold")
-    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
-      HammingLoss.evaluateHammingLoss(
-        dfRealFeatureEdgeScoreDS,
-        dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
-        "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
-    )
 
     val hammingLossFake: DataFrame =
       dfGroundTruth
@@ -638,18 +632,43 @@ object EdgeDetection {
     val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfGroundTruth.count().toDouble
     println("current hamming loss with 0 model: " + HLwhenAlways0.toString)
 
-    val HLoverThreshold: Array[((Double, Double), Double)] = thresholdToTestSorted.zip(hammingLosses)
+    println("Computing hamming loss for each threshold")
+
+/*    val hammingLosses: Array[Double] = thresholdToTestSorted.map(threshold =>
+      HammingLoss.evaluateHammingLoss(
+        dfRealFeatureEdgeScoreDS,
+        dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
+        "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
+    )
+*/
+    val PerfoverThresholdBuffer: ArrayBuffer[((Double,Double), (Double, Double, Double))] = new ArrayBuffer()
+
+    for (threshold <- thresholdToTestSorted) {
+      breakable {
+        val performances: (Double, Double, Double) = HammingLoss.evaluateHammingLossSensPrec(
+          dfRealFeatureEdgeScoreDS,
+          dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
+          "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
+        PerfoverThresholdBuffer.append((threshold, performances))
+        if (performances._1 == HLwhenAlways0) break // break out of the for loop
+      }
+    }
+
+
+    val PerfoverThreshold: Array[((Double, Double), (Double, Double, Double))] = PerfoverThresholdBuffer.toArray
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-    HLoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2, HLwhenAlways0))
+    PerfoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2._1, x._2._2, x._2._3, HLwhenAlways0))
 
 
-    HLoverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
+    PerfoverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
       ", thresholdON: " + x._1._1.toString + ", thresholdOFF: " + x._1._2.toString +
-      ", HL: " + x._2.toString + ", HL0: " + HLwhenAlways0))
+      ", HL: " + x._2._1.toString + ", HL0: " + HLwhenAlways0 +
+      ", Sensitivity: " + x._2._2.toString + ", Precision: " + x._2._3.toString))
 
-    (applianceID, applianceName, HLoverThreshold, HLwhenAlways0)
+    // (applianceID, applianceName, ((thresholdON, thesholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
+    (applianceID, applianceName, PerfoverThreshold, HLwhenAlways0)
 
   }
 
@@ -702,10 +721,10 @@ object EdgeDetection {
                                                    scoresOFFcolName: String,
                                                    outputDirName: String, bw: BufferedWriter,
                                                    downsamplingBinPredictionSec: Int,
-                                                   sc: SparkContext, sqlContext: SQLContext)
-  : Array[(Int, String, Double, Double, Double, Double)] = {
+                                                   sc: SparkContext, sqlContext: SQLContext) = {
 
-    val resultsOverAppliances: Array[(Int, String, Array[((Double, Double), Double)], Double)] =
+    val resultsOverAppliances: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)] =
+
       appliancesArray.map { (applianceID: Int) =>
 
         val applianceName = dfTaggingInfoCurrent.filter(dfTaggingInfoCurrent("applianceID") === applianceID).head.getAs[String]("ApplianceName")
@@ -735,6 +754,7 @@ object EdgeDetection {
         dfRealFeatureEdgeScoreDS.unpersist()
         dfGroundTruth.unpersist()
 
+        // Array(applianceID, applianceName, ((thresholdON, thresholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
         resultsApplianceOverThresholds
 
       }
@@ -745,6 +765,7 @@ object EdgeDetection {
     store.close()
 
 
+    //(applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model)
     val bestResultOverAppliances =
       HammingLoss.extractingHLoverThresholdAndAppliances(resultsOverAppliances)
 

@@ -1,6 +1,6 @@
 package com.cgnal.enel.kaggle.utils
 
-import java.io.{BufferedWriter, File, FileWriter}
+import java.io.{PrintWriter, BufferedWriter, File, FileWriter}
 import org.apache.spark.sql.DataFrame
 
 import scala.io.Source
@@ -25,6 +25,7 @@ object CSVutils {
       .option("header", "true")
       .save(outputFileName)
   }
+
 
 
   def Juxtappose(

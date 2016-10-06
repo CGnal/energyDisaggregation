@@ -46,22 +46,20 @@ object HammingLoss {
 
 
 
-  def evaluateHammingLoss(
-                           dfEdgeScores: DataFrame,
-                           dfGroundTruth: DataFrame,
-                           groundTruthColName: String,
-                           scoresONcolName: String,
-                           scoresOFFcolName: String,
-                           timeStampColName: String,
-                           applianceID: Int,
-                           thresholdON: Double,
-                           absolutethresholdOFF: Double,
-                           downsamplingBinPredictionSec: Int,
-                           onOffOutputDirName: String
-                         ) = {
+  def evaluateHammingLossSensPrec(dfEdgeScores: DataFrame,
+                                  dfGroundTruth: DataFrame,
+                                  groundTruthColName: String,
+                                  scoresONcolName: String,
+                                  scoresOFFcolName: String,
+                                  timeStampColName: String,
+                                  applianceID: Int,
+                                  thresholdON: Double,
+                                  absolutethresholdOFF: Double,
+                                  downsamplingBinPredictionSec: Int,
+                                  onOffOutputDirName: String) = {
 
     println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with thresholdON: " + thresholdON.toString +
-    " thresholdOFF: " + absolutethresholdOFF.toString)
+      " thresholdOFF: " + absolutethresholdOFF.toString)
 
     val onOffWindows: Array[(Long, Long)] =
       SimilarityScore.findOnOffIntervals(
@@ -87,34 +85,66 @@ object HammingLoss {
       predictionXORgroundTruth
         .agg(sum("XOR"))
 
-    val pippo: Double = hammingLoss.head().getLong(0) / dfGroundTruth.count().toDouble
+    val HL: Double = hammingLoss.head().getLong(0) / dfGroundTruth.count().toDouble
 
-    println("current hamming loss: " + pippo.toString)
+    // computing Precision and Sensitivity
+    val Positive: Int = dfGroundTruth.agg(sum(groundTruthColName)).head.getAs[Int](0)
+    val dfTP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 1)
+    val TP = dfTP.agg(sum("prediction")).head.getAs[Int](0)
 
-    pippo
+    val dfFN = df.filter(df("prediction") === 0 && df(groundTruthColName) === 1)
+    val FN = dfFN.agg(sum("prediction")).head.getAs[Int](0)
+
+    val dfFP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 0)
+    val FP = dfFP.agg(sum("prediction")).head.getAs[Int](0)
+
+    val sensitivity = TP.toDouble/(TP+FN)
+    val precision = TP.toDouble/(TP+FP)
+
+    println("current hamming loss: %.2f, sensitivity: %.2f, precision: %.2f", HL.toString, sensitivity, precision)
+
+    (HL, sensitivity, precision)
+
+
   }
 
 
 
+  /***
+    *
+    * @param resultsOverAppliances Array(applianceID, applianceName, ((thresholdON, thesholdOFF), (hammingLoss, sensitivity, precision)), hammingLoss0Model)
+    * @return
+    */
 
-  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[((Double, Double), Double)], Double)])
-  : Array[(Int, String, Double, Double, Double, Double)] = {
+  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)])
+  = {
 
-    val bestResultOverAppliances: Array[(Int, String, Double, Double, Double, Double)] = resultsOverAppliances.map(tuple => {
-      val bestThresholdHL: ((Double, Double), Double) = tuple._3.minBy(_._2)
+    val resultsOverAppliancesNot0Model = resultsOverAppliances.map(tuple =>
+      (tuple._1, tuple._2, tuple._3.filter(tuple2 => tuple2._2._1 != tuple._4), tuple._4))
+
+    val bestResultOverAppliances = resultsOverAppliancesNot0Model.map(tuple => {
+
+      val bestThresholdHL: ((Double, Double), (Double, Double, Double)) = tuple._3.minBy(_._2._1)
       val bestThresholdON = bestThresholdHL._1._1
       val bestThresholdOFF = bestThresholdHL._1._2
-      val bestHL = bestThresholdHL._2
+      val bestHL = bestThresholdHL._2._1
+      val bestSensitivity = bestThresholdHL._2._2
+      val bestPrecision = bestThresholdHL._2._3
 
-      (tuple._1, tuple._2, bestThresholdON, bestThresholdOFF, bestHL, tuple._4)
+
+      (tuple._1, tuple._2, bestThresholdON, bestThresholdOFF, bestSensitivity, bestPrecision, bestHL, tuple._4, bestHL/tuple._4)
     })
 
     val HLtotal = bestResultOverAppliances.map(tuple => tuple._5).reduce(_+_)/bestResultOverAppliances.length
-
     val HLalways0Total = bestResultOverAppliances.map(tuple => tuple._6).reduce(_+_)/bestResultOverAppliances.length
 
-    println("\n\nTotal HL over appliances: " + HLtotal.toString + " HL always0Model: " + HLalways0Total.toString)
+    val sensitivityTotal = bestResultOverAppliances.map(tuple => tuple._7).reduce(_+_)/bestResultOverAppliances.length
+    val precisionTotal = bestResultOverAppliances.map(tuple => tuple._8).reduce(_+_)/bestResultOverAppliances.length
 
+    println("\n\nTotal Sensitivity over appliances: %.3f, Precision: %.3f, HL : %.5f, HL always0Model: %.5f, HL/HL0: %.2f",
+      sensitivityTotal, precisionTotal, HLtotal, HLalways0Total, HLtotal/HLalways0Total)
+
+    //(applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model)
     bestResultOverAppliances
 
   }
