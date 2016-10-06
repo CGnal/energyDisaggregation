@@ -88,15 +88,15 @@ object HammingLoss {
     val HL: Double = hammingLoss.head().getLong(0) / dfGroundTruth.count().toDouble
 
     // computing Precision and Sensitivity
-    val Positive: Int = dfGroundTruth.agg(sum(groundTruthColName)).head.getAs[Int](0)
+    val Positive = dfGroundTruth.agg(sum(groundTruthColName)).head.getAs[Long](0)
     val dfTP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 1)
-    val TP = dfTP.agg(sum("prediction")).head.getAs[Int](0)
+    val TP = dfTP.agg(sum("prediction")).head.getAs[Long](0)
 
     val dfFN = df.filter(df("prediction") === 0 && df(groundTruthColName) === 1)
-    val FN = dfFN.agg(sum("prediction")).head.getAs[Int](0)
+    val FN = dfFN.agg(sum("prediction")).head.getAs[Long](0)
 
     val dfFP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 0)
-    val FP = dfFP.agg(sum("prediction")).head.getAs[Int](0)
+    val FP = dfFP.agg(sum("prediction")).head.getAs[Long](0)
 
     val sensitivity = TP.toDouble/(TP+FN)
     val precision = TP.toDouble/(TP+FP)
