@@ -78,6 +78,8 @@ object HammingLoss {
 
     val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer").cache()
 
+    val numberSteps = dfGroundTruth.count()
+
     val predictionXORgroundTruth =
       df.withColumn("XOR", (df(groundTruthColName) !== df("prediction")).cast(IntegerType))
 
@@ -85,7 +87,7 @@ object HammingLoss {
       predictionXORgroundTruth
         .agg(sum("XOR"))
 
-    val HL: Double = hammingLoss.head().getLong(0) / dfGroundTruth.count().toDouble
+    val HL: Double = hammingLoss.head().getLong(0).toDouble / numberSteps
 
     // computing Precision and Sensitivity
     val Positive = dfGroundTruth.agg(sum(groundTruthColName)).head.getAs[Long](0)
@@ -100,7 +102,8 @@ object HammingLoss {
     val sensitivity = pluto._1
     val precision = pluto._2
 
-    println(f"current hamming loss: $HL%1.5f, sensitivity: $sensitivity%1.6f, precision: $precision%1.6f; [TP: $TP, DETECTED POSITIVE: $detectedPositive, POSITIVE: $Positive]")
+    println(f"current hamming loss: $HL%1.5f, sensitivity: $sensitivity%1.6f, precision: $precision%1.6f;" +
+      f" [TP: $TP, DETECTED POSITIVE: $detectedPositive, POSITIVE: $Positive, ALL STEPS: $numberSteps]")
 
     (HL, sensitivity, precision)
 
