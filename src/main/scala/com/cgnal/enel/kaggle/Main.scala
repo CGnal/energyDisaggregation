@@ -8,7 +8,7 @@ import com.cgnal.enel.kaggle.utils._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.functions.first
+import org.apache.spark.sql.functions._
 
 import java.io._
 import org.apache.spark.sql.expressions.{Window, WindowSpec}
@@ -240,8 +240,9 @@ object Main {
     storeTrain.writeObject(bestResultOverAppliancesTrain)
     storeTrain.close()
 
+
     // STORING A CSV WITH RESULTS
-    val storeTrainCSV = new PrintWriter(new File(dirNameResultsTest + "/bestResultsOverAppliances.csv"))
+    val storeTrainCSV = new PrintWriter(new File(dirNameResultsTrain + "/bestResultsOverAppliances.csv"))
     storeTrainCSV.println("applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model")
     bestResultOverAppliancesTrain.foreach(tuple => storeTrainCSV.println(tuple._1 + "," +
       tuple._2 + "," +
@@ -254,9 +255,13 @@ object Main {
       tuple._9))
     storeTrainCSV.close()
 
+
+
+
     // TEST SET -------------------------------------------------------------------------------------------------------
     val theDirTest = new File(dirNameResultsTest)
     if (!theDirTest.exists()) theDirTest.mkdirs()
+
     val bwTest: BufferedWriter = new BufferedWriter(new FileWriter(outputTextFilenameTest))
     if (appliancesTest.length != 0) {
       // from now on the code performs the same operations already done
@@ -276,9 +281,6 @@ object Main {
 
       // build prediction for each appliance in the appliancesTest array by using nrThresholdsPerAppliance threshold
       // evenly spaced between 0 and the max value founded
-      val outputTextFilenameTest = dirNameResultsTrain + "/outputFileTest.txt"
-
-      val fileOutputTest = new File(outputTextFilenameTest)
 
       bwTest.write("TEST SET loop over appliances (and thresholds):")
       val bestResultOverAppliancesTest = EdgeDetection.buildPredictionRealFeatureLoopOverAppliances(dfFeatureEdgeDetectionTest,
@@ -331,6 +333,7 @@ object Main {
     bwTest.close()
     bwTrain.close()
   }
+
 }
 
 

@@ -76,7 +76,7 @@ object HammingLoss {
     val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
       timeStampColName, "prediction", downsamplingBinPredictionSec)
 
-    val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer")
+    val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer").cache()
 
     val predictionXORgroundTruth =
       df.withColumn("XOR", (df(groundTruthColName) !== df("prediction")).cast(IntegerType))
@@ -92,16 +92,15 @@ object HammingLoss {
     val dfTP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 1)
     val TP = dfTP.agg(sum("prediction")).head.getAs[Long](0)
 
-    val dfFN = df.filter(df("prediction") === 0 && df(groundTruthColName) === 1)
-    val FN = dfFN.agg(sum("prediction")).head.getAs[Long](0)
+    val detectedPositive = df.agg(sum("prediction")).head.getAs[Long](0)
 
-    val dfFP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 0)
-    val FP = dfFP.agg(sum("prediction")).head.getAs[Long](0)
+    val pluto = if (TP == 0) (0d,0d)
+    else (TP.toDouble/Positive, TP.toDouble/detectedPositive)
 
-    val sensitivity = TP.toDouble/(TP+FN)
-    val precision = TP.toDouble/(TP+FP)
+    val sensitivity = pluto._1
+    val precision = pluto._2
 
-    println("current hamming loss: %.2f, sensitivity: %.2f, precision: %.2f", HL.toString, sensitivity, precision)
+    println(f"current hamming loss: $HL%1.5f, sensitivity: $sensitivity%1.6f, precision: $precision%1.6f; [TP: $TP, DETECTED POSITIVE: $detectedPositive, POSITIVE: $Positive]")
 
     (HL, sensitivity, precision)
 
@@ -131,7 +130,6 @@ object HammingLoss {
       val bestSensitivity = bestThresholdHL._2._2
       val bestPrecision = bestThresholdHL._2._3
 
-
       (tuple._1, tuple._2, bestThresholdON, bestThresholdOFF, bestSensitivity, bestPrecision, bestHL, tuple._4, bestHL/tuple._4)
     })
 
@@ -141,8 +139,9 @@ object HammingLoss {
     val sensitivityTotal = bestResultOverAppliances.map(tuple => tuple._7).reduce(_+_)/bestResultOverAppliances.length
     val precisionTotal = bestResultOverAppliances.map(tuple => tuple._8).reduce(_+_)/bestResultOverAppliances.length
 
-    println("\n\nTotal Sensitivity over appliances: %.3f, Precision: %.3f, HL : %.5f, HL always0Model: %.5f, HL/HL0: %.2f",
-      sensitivityTotal, precisionTotal, HLtotal, HLalways0Total, HLtotal/HLalways0Total)
+    val pippo = HLtotal/HLalways0Total
+    println(f"\n\nTotal Sensitivity over appliances: $sensitivityTotal%1.3f, Precision: $precisionTotal%1.3f " +
+      f"HL : $HLtotal%1.5f, HL always0Model: $HLalways0Total%1.5f, HL/HL0: $pippo%3.2f")
 
     //(applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model)
     bestResultOverAppliances

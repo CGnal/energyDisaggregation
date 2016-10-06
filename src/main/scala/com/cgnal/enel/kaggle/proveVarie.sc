@@ -14,6 +14,10 @@ val pippo = Map(("x",1),("y",2))
 
 val pappo = Map(("x",3),("y",4))
 
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
+
 import collection.JavaConverters._
 import scala.collection.breakOut
 import java.util
@@ -37,3 +41,17 @@ val thresholdToTestArray: Array[Double] = thresholdToTest.asScala.map(_.doubleVa
 val thresholdToTestSorted = thresholdToTestArray.take(3).sorted
 val troia: Int = 1
 troia/2d
+
+val HL = 5.1334242
+println(f"current hamming loss: $HL%2.2f")
+
+
+
+
+
+
+
+
+
+
+
