@@ -68,7 +68,7 @@ object Main {
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
 
-    val nrThresholdsPerAppliance = 19
+//    val nrThresholdsPerAppliance = 19
 
     val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     // instead of building it from csv
@@ -89,7 +89,7 @@ object Main {
     val downsamplingBinPredictionSize: Int = (downsamplingBinPredictionSec/(downsamplingBinSize * 0.167)).round.toInt
     //------------------------------------------------------------------------------------------------------------------
 
-    if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
+//    if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
 
     // OUTPUT DIR NAME -------------------------------------------------------------------------------------------------
     val dirNameFeatureTrain = ReferencePath.datasetDirPath + house + "/dfFeatureTrain" + dayFolderArrayTraining(0) +
@@ -106,11 +106,11 @@ object Main {
     val dirNameResultsTrain = ReferencePath.datasetDirPath + house + "/ResultsTrain"+ extraLabelOutputDirName + dayFolderArrayTraining(0) +
       "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
-      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
+      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "0andBestThr"// + "_nrThr" + (nrThresholdsPerAppliance+1).toString
 
     val dirNameResultsTest = ReferencePath.datasetDirPath + house + "/ResultsTest" + extraLabelOutputDirName + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
-      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
+      "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "0andBestThr"// + "_nrThr" + (nrThresholdsPerAppliance+1).toString
 
     val outputTextFilenameTraining = dirNameResultsTrain + "/outputFileTraining.txt"
     val outputTextFilenameTest = dirNameResultsTest + "/outputFileTest.txt"
@@ -220,7 +220,7 @@ object Main {
       selectedFeature,
       timestepsNumberPreEdge, timestepsNumberPostEdge,
       downsamplingBinPredictionSize,
-      nrThresholdsPerAppliance,
+//      nrThresholdsPerAppliance,
       partitionNumber,
       scoresONcolName, scoresOFFcolName,
       dirNameResultsTrain, bwTrain, downsamplingBinPredictionSec,
@@ -290,7 +290,7 @@ object Main {
         selectedFeature,
         timestepsNumberPreEdge, timestepsNumberPostEdge,
         downsamplingBinPredictionSize,
-        nrThresholdsPerAppliance,
+//        nrThresholdsPerAppliance,
         partitionNumber,
         scoresONcolName, scoresOFFcolName,
         dirNameResultsTest, bwTest, downsamplingBinPredictionSec,

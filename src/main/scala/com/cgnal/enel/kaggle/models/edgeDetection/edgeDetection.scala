@@ -612,11 +612,9 @@ object EdgeDetection {
 
 
 
-  def buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS: DataFrame,
-                                           dfGroundTruth: DataFrame,
+  def buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDSGroundTruth: DataFrame,
                                            thresholdToTestSorted: Array[(Double, Double)],
                                            applianceID: Int, applianceName: String,
-                                           selectedFeature: String,
                                            outputDirName: String,
                                            scoresONcolName: String,
                                            scoresOFFcolName: String,
@@ -626,10 +624,10 @@ object EdgeDetection {
     var dateTime = DateTime.now()
 
     val hammingLossFake: DataFrame =
-      dfGroundTruth
+      dfRealFeatureEdgeScoreDSGroundTruth
         .agg(sum("GroundTruth"))
 
-    val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfGroundTruth.count().toDouble
+    val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfRealFeatureEdgeScoreDSGroundTruth.count().toDouble
     println("current hamming loss with 0 model: " + HLwhenAlways0.toString)
 
     println("Computing hamming loss for each threshold")
@@ -643,11 +641,12 @@ object EdgeDetection {
 */
     val PerfoverThresholdBuffer: ArrayBuffer[((Double,Double), (Double, Double, Double))] = new ArrayBuffer()
 
+    // TODO questo break non funziona! controllare perché
     for (threshold <- thresholdToTestSorted) {
       breakable {
         val performances: (Double, Double, Double) = HammingLoss.evaluateHammingLossSensPrec(
-          dfRealFeatureEdgeScoreDS,
-          dfGroundTruth, "GroundTruth", scoresONcolName, scoresOFFcolName,
+          dfRealFeatureEdgeScoreDSGroundTruth,
+          "GroundTruth", scoresONcolName, scoresOFFcolName,
           "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
         PerfoverThresholdBuffer.append((threshold, performances))
         if (performances._1 == HLwhenAlways0 || performances._2 == 0d) break // break out of the for loop
@@ -674,6 +673,63 @@ object EdgeDetection {
 
 
 
+
+
+  def buildPredictionEvaluateHLRealFeature0andBestThresholds(dfRealFeatureEdgeScoreDSGroundTruth: DataFrame,
+                                                             applianceID: Int, applianceName: String,
+                                                             outputDirName: String,
+                                                             scoresONcolName: String,
+                                                             scoresOFFcolName: String,
+                                                             downsamplingBinPredictionSec: Int,
+                                                             bw: BufferedWriter) = {
+
+    var dateTime = DateTime.now()
+
+    val hammingLossFake: DataFrame =
+      dfRealFeatureEdgeScoreDSGroundTruth
+        .agg(sum("GroundTruth"))
+
+    val HLwhenAlways0: Double = hammingLossFake.head().getLong(0) / dfRealFeatureEdgeScoreDSGroundTruth.count().toDouble
+    println("current hamming loss with 0 model: " + HLwhenAlways0.toString)
+
+    // EVALUATE MODEL WITH THRESHOLDS 0
+    val performances0Threshold: (Double, Double, Double, (Double, Double)) = HammingLoss.evaluateHammingLossSensPrecAndThreshold(
+      dfRealFeatureEdgeScoreDSGroundTruth,
+      "GroundTruth", scoresONcolName, scoresOFFcolName,
+      "TimestampPrediction", applianceID, 0d, 0d, downsamplingBinPredictionSec, outputDirName)
+
+    // EVALUATE MODEL WITH BEST THRESHOLDS
+    val performancesBestThreshold: (Double, Double, Double, (Double, Double)) = HammingLoss.evaluateHammingLossSensPrecAndThreshold(
+      dfRealFeatureEdgeScoreDSGroundTruth,
+      "GroundTruth", scoresONcolName, scoresOFFcolName,
+      "TimestampPrediction", applianceID, performances0Threshold._4._1, performances0Threshold._4._2, downsamplingBinPredictionSec, outputDirName)
+
+    // ASSEMBLING ARRAY WITH PERFORMANCES OBTAINED FROM THE 2 THERSHOLDS USED
+    val PerfoverThreshold: Array[((Double, Double), (Double, Double, Double))] = Array(((0d, 0d), (performances0Threshold._1, performances0Threshold._2, performances0Threshold._3)),
+      ((performances0Threshold._4._1, performances0Threshold._4._2), (performancesBestThreshold._1, performancesBestThreshold._2, performancesBestThreshold._3)))
+
+
+
+    println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
+
+
+    PerfoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2._1, x._2._2, x._2._3, HLwhenAlways0))
+
+
+    PerfoverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
+      ", thresholdON: " + x._1._1.toString + ", thresholdOFF: " + x._1._2.toString +
+      ", HL: " + x._2._1.toString + ", HL0: " + HLwhenAlways0 +
+      ", Sensitivity: " + x._2._2.toString + ", Precision: " + x._2._3.toString))
+
+    // (applianceID, applianceName, ((thresholdON, thesholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
+    (applianceID, applianceName, PerfoverThreshold, HLwhenAlways0)
+
+  }
+
+
+
+
+
   def buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS: DataFrame,
                               dfTaggingInfo: DataFrame,
                               applianceID: Int,
@@ -696,13 +752,13 @@ object EdgeDetection {
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
 
 
-    val dfGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreDS, onOffWindowsGroundTruth,
+    val dfRealFeatureEdgeScoreDSGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreDS, onOffWindowsGroundTruth,
       "TimestampPrediction", "GroundTruth", downsamplingBinPredictionSec)
 
     println("Time for building dfGroudTruth: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-    dfGroundTruth
+    dfRealFeatureEdgeScoreDSGroundTruth
 
   }
 
@@ -715,7 +771,7 @@ object EdgeDetection {
                                                    selectedFeature: String,
                                                    timestepsNumberPreEdge: Int, timestepsNumberPostEdge: Int,
                                                    downsamplingBinPredictionSize: Int,
-                                                   nrThresholdsPerAppliance: Int,
+//                                                   nrThresholdsPerAppliance: Int,
                                                    partitionNumber: Int,
                                                    scoresONcolName: String,
                                                    scoresOFFcolName: String,
@@ -740,19 +796,25 @@ object EdgeDetection {
           downsamplingBinPredictionSize, partitionNumber,
           outputDirName, sc, sqlContext)
 
-        val dfGroundTruth = EdgeDetection.buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS,
+        val dfRealFeatureEdgeScoreDSGroundTruth = EdgeDetection.buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS,
           dfTaggingInfoCurrent, applianceID, downsamplingBinPredictionSec, outputDirName).cache()
 
-        println("Selecting threshold to test")
+
+        // CODE WITH ARRAY OF THRESHOLDS
+/*        println("Selecting threshold to test")
         val thresholdToTestSortedTrain: Array[(Double, Double)] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
           scoresONcolName, scoresOFFcolName, nrThresholdsPerAppliance)
 
-        val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDS,
-          dfGroundTruth, thresholdToTestSortedTrain, applianceID, applianceName, selectedFeature, outputDirName, scoresONcolName,
+          scoresOFFcolName, downsamplingBinPredictionSec, bw)
+*/
+        // CODE WITH ONLY 0 and BEST THRESHOLDS (i.e. 2 thresholds)
+        val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature0andBestThresholds(dfRealFeatureEdgeScoreDSGroundTruth,
+          applianceID, applianceName, outputDirName, scoresONcolName,
           scoresOFFcolName, downsamplingBinPredictionSec, bw)
 
+
         dfRealFeatureEdgeScoreDS.unpersist()
-        dfGroundTruth.unpersist()
+        dfRealFeatureEdgeScoreDSGroundTruth.unpersist()
 
         // Array(applianceID, applianceName, ((thresholdON, thresholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
         resultsApplianceOverThresholds

@@ -46,24 +46,23 @@ object HammingLoss {
 
 
 
-  def evaluateHammingLossSensPrec(dfEdgeScores: DataFrame,
-                                  dfGroundTruth: DataFrame,
-                                  groundTruthColName: String,
-                                  scoresONcolName: String,
-                                  scoresOFFcolName: String,
-                                  timeStampColName: String,
-                                  applianceID: Int,
-                                  thresholdON: Double,
-                                  absolutethresholdOFF: Double,
-                                  downsamplingBinPredictionSec: Int,
-                                  onOffOutputDirName: String) = {
+  def evaluateHammingLossSensPrecAndThreshold(dfEdgeScoresGroundTruth: DataFrame,
+                                              groundTruthColName: String,
+                                              scoresONcolName: String,
+                                              scoresOFFcolName: String,
+                                              timeStampColName: String,
+                                              applianceID: Int,
+                                              thresholdON: Double,
+                                              thresholdOFF: Double,
+                                              downsamplingBinPredictionSec: Int,
+                                              onOffOutputDirName: String) = {
 
     println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with thresholdON: " + thresholdON.toString +
-      " thresholdOFF: " + absolutethresholdOFF.toString)
+      " thresholdOFF: " + thresholdOFF.toString)
 
     val onOffWindows: Array[(Long, Long)] =
       SimilarityScore.findOnOffIntervals(
-        dfEdgeScores, thresholdON, absolutethresholdOFF,
+        dfEdgeScoresGroundTruth, thresholdON, thresholdOFF,
         scoresONcolName, scoresOFFcolName, timeStampColName)
 
     val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
@@ -73,15 +72,13 @@ object HammingLoss {
     Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
 
 
-    val predictionsDf = addOnOffStatusToDF(dfEdgeScores,onOffWindows,
-      timeStampColName, "prediction", downsamplingBinPredictionSec)
+    val dfPredictionsGroundTruth = addOnOffStatusToDF(dfEdgeScoresGroundTruth,onOffWindows,
+      timeStampColName, "prediction", downsamplingBinPredictionSec).cache()
 
-    val df = dfGroundTruth.join(predictionsDf, Seq(timeStampColName), "left_outer").cache()
-
-    val numberSteps = dfGroundTruth.count()
+    val numberSteps = dfPredictionsGroundTruth.count()
 
     val predictionXORgroundTruth =
-      df.withColumn("XOR", (df(groundTruthColName) !== df("prediction")).cast(IntegerType))
+      dfPredictionsGroundTruth.withColumn("XOR", (dfPredictionsGroundTruth(groundTruthColName) !== dfPredictionsGroundTruth("prediction")).cast(IntegerType))
 
     val hammingLoss: DataFrame =
       predictionXORgroundTruth
@@ -90,11 +87,11 @@ object HammingLoss {
     val HL: Double = hammingLoss.head().getLong(0).toDouble / numberSteps
 
     // computing Precision and Sensitivity
-    val Positive = dfGroundTruth.agg(sum(groundTruthColName)).head.getAs[Long](0)
-    val dfTP = df.filter(df("prediction") === 1 && df(groundTruthColName) === 1)
+    val Positive = dfPredictionsGroundTruth.agg(sum(groundTruthColName)).head.getAs[Long](0)
+    val dfTP = dfPredictionsGroundTruth.filter(dfPredictionsGroundTruth("prediction") === 1 && dfPredictionsGroundTruth(groundTruthColName) === 1)
     val TP = dfTP.agg(sum("prediction")).head.getAs[Long](0)
 
-    val detectedPositive = df.agg(sum("prediction")).head.getAs[Long](0)
+    val detectedPositive = dfPredictionsGroundTruth.agg(sum("prediction")).head.getAs[Long](0)
 
     val pluto = if (TP == 0) (0d,0d)
     else (TP.toDouble/Positive, TP.toDouble/detectedPositive)
@@ -105,8 +102,75 @@ object HammingLoss {
     println(f"current hamming loss: $HL%1.5f, sensitivity: $sensitivity%1.6f, precision: $precision%1.6f;" +
       f" [TP: $TP, DETECTED POSITIVE: $detectedPositive, POSITIVE: $Positive, ALL STEPS: $numberSteps]")
 
-    (HL, sensitivity, precision)
+    //extracting threshold
+    val minThresholdONtp = dfTP.agg(min(scoresONcolName)).head.getAs[Double](0)
+    val maxThresholdOFFtp = dfTP.agg(max(scoresOFFcolName)).head.getAs[Double](0)
 
+    if (maxThresholdOFFtp > 0 || minThresholdONtp < 0) sys.error("thresholdOFF must be negative and thresholdOFF positive")
+
+    (HL, sensitivity, precision, (minThresholdONtp, maxThresholdOFFtp))
+
+  }
+
+
+  def evaluateHammingLossSensPrec(dfEdgeScoresGroundTruth: DataFrame,
+                                  groundTruthColName: String,
+                                  scoresONcolName: String,
+                                  scoresOFFcolName: String,
+                                  timeStampColName: String,
+                                  applianceID: Int,
+                                  thresholdON: Double,
+                                  thresholdOFF: Double,
+                                  downsamplingBinPredictionSec: Int,
+                                  onOffOutputDirName: String) = {
+
+    println("evaluate HAMMING LOSS for appliance: " + applianceID.toString + " with thresholdON: " + thresholdON.toString +
+      " thresholdOFF: " + thresholdOFF.toString)
+
+    val onOffWindows: Array[(Long, Long)] =
+      SimilarityScore.findOnOffIntervals(
+        dfEdgeScoresGroundTruth, thresholdON, thresholdOFF,
+        scoresONcolName, scoresOFFcolName, timeStampColName)
+
+    val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
+      applianceID.toString + "_thresholdON" + (thresholdON*1E7).toInt.toString + ".txt"
+
+    val stringOnOff: String = onOffWindows.mkString("\n")
+    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
+
+
+    val dfPredictionsGroundTruth = addOnOffStatusToDF(dfEdgeScoresGroundTruth,onOffWindows,
+      timeStampColName, "prediction", downsamplingBinPredictionSec)
+
+    val numberSteps = dfPredictionsGroundTruth.count()
+
+    val predictionXORgroundTruth =
+      dfPredictionsGroundTruth.withColumn("XOR", (dfPredictionsGroundTruth(groundTruthColName) !== dfPredictionsGroundTruth("prediction")).cast(IntegerType))
+
+    val hammingLoss: DataFrame =
+      predictionXORgroundTruth
+        .agg(sum("XOR"))
+
+    val HL: Double = hammingLoss.head().getLong(0).toDouble / numberSteps
+
+    // computing Precision and Sensitivity
+    val Positive = dfPredictionsGroundTruth.agg(sum(groundTruthColName)).head.getAs[Long](0)
+    val dfTP = dfPredictionsGroundTruth.filter(dfPredictionsGroundTruth("prediction") === 1 && dfPredictionsGroundTruth(groundTruthColName) === 1)
+    val TP = dfTP.agg(sum("prediction")).head.getAs[Long](0)
+
+    val detectedPositive = dfPredictionsGroundTruth.agg(sum("prediction")).head.getAs[Long](0)
+
+    val pluto = if (TP == 0) (0d,0d)
+    else (TP.toDouble/Positive, TP.toDouble/detectedPositive)
+
+    val sensitivity = pluto._1
+    val precision = pluto._2
+
+    println(f"current hamming loss: $HL%1.5f, sensitivity: $sensitivity%1.6f, precision: $precision%1.6f;" +
+      f" [TP: $TP, DETECTED POSITIVE: $detectedPositive, POSITIVE: $Positive, ALL STEPS: $numberSteps]")
+
+
+    (HL, sensitivity, precision)
 
   }
 
