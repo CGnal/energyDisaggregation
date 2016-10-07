@@ -1,6 +1,6 @@
 package com.cgnal.enel.kaggle.utils
 
-import java.io.{FileInputStream, ObjectInputStream}
+import java.io.{BufferedWriter, FileInputStream, ObjectInputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Paths, Files}
 
@@ -14,6 +14,17 @@ import org.apache.spark.sql.types.IntegerType
   */
 object HammingLoss {
 
+
+  /***
+    *
+    * @param df
+    * @param onOffWindows
+    * @param timeStampColName
+    * @param newColName
+    * @param downsamplingBinPredictionSec
+    * @param timestampFactor
+    * @return
+    */
   def addOnOffStatusToDF(
                           df: DataFrame,
                           onOffWindows: Array[(Long, Long)],
@@ -182,10 +193,10 @@ object HammingLoss {
     * @return
     */
 
-  def extractingHLoverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)])
+  def extractingPerfOverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)])
   = {
 
-    val resultsOverAppliancesNot0Model = resultsOverAppliances.map(tuple =>
+    val resultsOverAppliancesNot0Model: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)] = resultsOverAppliances.map(tuple =>
       (tuple._1, tuple._2, tuple._3.filter(tuple2 => tuple2._2._1 != tuple._4), tuple._4))
 
     val bestResultOverAppliances = resultsOverAppliancesNot0Model.map(tuple => {
@@ -199,16 +210,6 @@ object HammingLoss {
 
       (tuple._1, tuple._2, bestThresholdON, bestThresholdOFF, bestSensitivity, bestPrecision, bestHL, tuple._4, bestHL/tuple._4)
     })
-
-    val HLtotal = bestResultOverAppliances.map(tuple => tuple._5).reduce(_+_)/bestResultOverAppliances.length
-    val HLalways0Total = bestResultOverAppliances.map(tuple => tuple._6).reduce(_+_)/bestResultOverAppliances.length
-
-    val sensitivityTotal = bestResultOverAppliances.map(tuple => tuple._7).reduce(_+_)/bestResultOverAppliances.length
-    val precisionTotal = bestResultOverAppliances.map(tuple => tuple._8).reduce(_+_)/bestResultOverAppliances.length
-
-    val pippo = HLtotal/HLalways0Total
-    println(f"\n\nTotal Sensitivity over appliances: $sensitivityTotal%1.3f, Precision: $precisionTotal%1.3f " +
-      f"HL : $HLtotal%1.5f, HL always0Model: $HLalways0Total%1.5f, HL/HL0: $pippo%3.2f")
 
     //(applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model)
     bestResultOverAppliances

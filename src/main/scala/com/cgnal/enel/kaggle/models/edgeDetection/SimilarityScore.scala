@@ -216,15 +216,13 @@ object SimilarityScore {
 */
     val thresholdsMin = 0d
 
-    val stepONtime = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
-    val stepONepsilon = stepONtime/100
-    val stepON = stepONtime - stepONepsilon
-    val thresholdSortedON = Range.BigDecimal(thresholdsMin, thresholdsONmax, stepON).map(el => el.toDouble).toArray
+    val stepON = BigDecimal((thresholdsONmax - thresholdsMin)/nrOfThresholds)
+    val thresholdSortedONtemp = Range.BigDecimal(thresholdsMin, thresholdsONmax, stepON).map(el => el.toDouble).toArray
+    val thresholdSortedON = (thresholdSortedONtemp.+:(thresholdsONmax)).sortWith(_ < _)
 
-    val stepOFFtime = BigDecimal((thresholdsOFFmin - thresholdsMin)/nrOfThresholds)
-    val stepOFFepsilon = stepOFFtime/100
-    val stepOFF = stepOFFtime - stepOFFepsilon
-    val thresholdSortedOFF = Range.BigDecimal(thresholdsMin, thresholdsOFFmin, stepOFF).map(el => el.toDouble).toArray
+    val stepOFF = BigDecimal((thresholdsOFFmin - thresholdsMin)/nrOfThresholds)
+    val thresholdSortedOFFtemp = Range.BigDecimal(thresholdsMin, thresholdsOFFmin, stepOFF).map(el => el.toDouble).toArray
+    val thresholdSortedOFF: Array[Double] = (thresholdSortedOFFtemp.+:(thresholdsOFFmin)).sortWith(_ > _)
 
     val thresholdToTestSorted: Array[(Double, Double)] = thresholdSortedON.zip(thresholdSortedOFF)
 

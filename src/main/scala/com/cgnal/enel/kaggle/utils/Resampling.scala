@@ -30,7 +30,7 @@ object Resampling {
         selectedFeature,
         avg(selectedFeature).over(w))
 
-    df2
+    df3
   }
 
 
@@ -77,7 +77,7 @@ object Resampling {
     val tmp: DataFrame = df
       .sqlContext
       .sql("SELECT *, " +
-        selectedFeature + "- LAG(" + selectedFeature + ",1,0) OVER (ORDER BY " + IDtime_ColName + ") AS " + selectedFeature + "_FirstDiff " +
+        selectedFeature + "- LAG(" + selectedFeature + ",1,0) OVER (ORDER BY " + IDtime_ColName + ") AS " + selectedFeature + "_FirstDiff" +
         "FROM DFTABLE")
     tmp
   }

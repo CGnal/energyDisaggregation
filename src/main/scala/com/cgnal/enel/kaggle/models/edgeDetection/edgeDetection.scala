@@ -1,6 +1,6 @@
 package com.cgnal.enel.kaggle.models.edgeDetection
 
-import java.io.{BufferedWriter, FileOutputStream, ObjectOutputStream}
+import java.io._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Paths, Files}
 
@@ -585,7 +585,7 @@ object EdgeDetection {
       timestepsNumberPreEdge, timestepsNumberPostEdge, partitionNumber,
       sc, sqlContext).cache()
 
-    // saving dfRealFeatureEdgeScoreApplianceTrain
+    // saving dfRealFeatureEdgeScoreAppliance
     val filenameDfRealFeatureEdgeScore = outputDirName + "/ScoreNoDS_AppID" + applianceID.toString + ".csv"
     CSVutils.storingSparkCsv(dfRealFeatureEdgeScore, filenameDfRealFeatureEdgeScore)
 
@@ -639,35 +639,31 @@ object EdgeDetection {
         "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
     )
 */
-    val PerfoverThresholdBuffer: ArrayBuffer[((Double,Double), (Double, Double, Double))] = new ArrayBuffer()
+    val PerfOverThresholdBuffer: ArrayBuffer[((Double,Double), (Double, Double, Double))] = new ArrayBuffer()
 
-    // TODO questo break non funziona! controllare perché
-    for (threshold <- thresholdToTestSorted) {
-      breakable {
+    breakable {
+      for (threshold <- thresholdToTestSorted) {
         val performances: (Double, Double, Double) = HammingLoss.evaluateHammingLossSensPrec(
           dfRealFeatureEdgeScoreDSGroundTruth,
           "GroundTruth", scoresONcolName, scoresOFFcolName,
           "TimestampPrediction", applianceID, threshold._1, threshold._2, downsamplingBinPredictionSec, outputDirName)
-        PerfoverThresholdBuffer.append((threshold, performances))
+        PerfOverThresholdBuffer.append((threshold, performances))
         if (performances._1 == HLwhenAlways0 || performances._2 == 0d) break // break out of the for loop
       }
     }
 
-
-    val PerfoverThreshold: Array[((Double, Double), (Double, Double, Double))] = PerfoverThresholdBuffer.toArray
+    val PerfOverThreshold: Array[((Double, Double), (Double, Double, Double))] = PerfOverThresholdBuffer.toArray
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
+    PerfOverThreshold.foreach(x => println(x._1._1, x._1._2, x._2._1, x._2._2, x._2._3, HLwhenAlways0))
 
-    PerfoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2._1, x._2._2, x._2._3, HLwhenAlways0))
-
-
-    PerfoverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
+    PerfOverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
       ", thresholdON: " + x._1._1.toString + ", thresholdOFF: " + x._1._2.toString +
       ", HL: " + x._2._1.toString + ", HL0: " + HLwhenAlways0 +
       ", Sensitivity: " + x._2._2.toString + ", Precision: " + x._2._3.toString))
 
     // (applianceID, applianceName, ((thresholdON, thesholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
-    (applianceID, applianceName, PerfoverThreshold, HLwhenAlways0)
+    (applianceID, applianceName, PerfOverThreshold, HLwhenAlways0)
 
   }
 
@@ -705,7 +701,7 @@ object EdgeDetection {
       "TimestampPrediction", applianceID, performances0Threshold._4._1, performances0Threshold._4._2, downsamplingBinPredictionSec, outputDirName)
 
     // ASSEMBLING ARRAY WITH PERFORMANCES OBTAINED FROM THE 2 THERSHOLDS USED
-    val PerfoverThreshold: Array[((Double, Double), (Double, Double, Double))] = Array(((0d, 0d), (performances0Threshold._1, performances0Threshold._2, performances0Threshold._3)),
+    val PerfOverThreshold: Array[((Double, Double), (Double, Double, Double))] = Array(((0d, 0d), (performances0Threshold._1, performances0Threshold._2, performances0Threshold._3)),
       ((performances0Threshold._4._1, performances0Threshold._4._2), (performancesBestThreshold._1, performancesBestThreshold._2, performancesBestThreshold._3)))
 
 
@@ -713,16 +709,16 @@ object EdgeDetection {
     println("Time for THRESHOLD + FINDPEAKS ESTRAZIONE ON_Time OFF_Time PREDICTED: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
 
-    PerfoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2._1, x._2._2, x._2._3, HLwhenAlways0))
+//    PerfoverThreshold.foreach(x => println(x._1._1, x._1._2, x._2._1, x._2._2, x._2._3, HLwhenAlways0))
 
 
-    PerfoverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
+    PerfOverThreshold.foreach(x => bw.write("\napplianceID: " + applianceID.toString +
       ", thresholdON: " + x._1._1.toString + ", thresholdOFF: " + x._1._2.toString +
       ", HL: " + x._2._1.toString + ", HL0: " + HLwhenAlways0 +
       ", Sensitivity: " + x._2._2.toString + ", Precision: " + x._2._3.toString))
 
     // (applianceID, applianceName, ((thresholdON, thesholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
-    (applianceID, applianceName, PerfoverThreshold, HLwhenAlways0)
+    (applianceID, applianceName, PerfOverThreshold, HLwhenAlways0)
 
   }
 
@@ -730,11 +726,11 @@ object EdgeDetection {
 
 
 
-  def buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS: DataFrame,
-                              dfTaggingInfo: DataFrame,
-                              applianceID: Int,
-                              downsamplingBinPredictionSec: Int,
-                              outputDirName: String) = {
+  def buildDfGroundTruthStoreOnOffTimes(dfRealFeatureEdgeScoreDS: DataFrame,
+                                        dfTaggingInfo: DataFrame,
+                                        applianceID: Int,
+                                        downsamplingBinPredictionSec: Int,
+                                        outputDirName: String) = {
 
     var dateTime = DateTime.now()
 
@@ -771,68 +767,81 @@ object EdgeDetection {
                                                    selectedFeature: String,
                                                    timestepsNumberPreEdge: Int, timestepsNumberPostEdge: Int,
                                                    downsamplingBinPredictionSize: Int,
-//                                                   nrThresholdsPerAppliance: Int,
+                                                   nrThresholdsPerAppliance: Int,
                                                    partitionNumber: Int,
                                                    scoresONcolName: String,
                                                    scoresOFFcolName: String,
                                                    outputDirName: String, bw: BufferedWriter,
                                                    downsamplingBinPredictionSec: Int,
-                                                   sc: SparkContext, sqlContext: SQLContext) = {
+                                                   sc: SparkContext, sqlContext: SQLContext,
+                                                   zeroAndGroundTruthThresholdLabel: Int = 0,
+                                                   readingFromFileResultsOverAppliancesLabel: Int = 0) = {
 
-    val resultsOverAppliances: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)] =
+    val resultsOverAppliances =
+      if (readingFromFileResultsOverAppliancesLabel == 0) {
 
-      appliancesArray.map { (applianceID: Int) =>
+        val resultsOverAppliancesInner: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)] = appliancesArray.map { (applianceID: Int) =>
+          val applianceName = dfTaggingInfoCurrent.filter(dfTaggingInfoCurrent("applianceID") === applianceID).head.getAs[String]("ApplianceName")
 
-        val applianceName = dfTaggingInfoCurrent.filter(dfTaggingInfoCurrent("applianceID") === applianceID).head.getAs[String]("ApplianceName")
+          println("\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
+          bw.write("\n\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
 
+          val dfRealFeatureEdgeScoreDS = EdgeDetection.buildStoreDfSimilarityScoreRealFeature(dfFeature,
+            dfEdgeSignatures, applianceID, selectedFeature,
+            timestepsNumberPreEdge, timestepsNumberPostEdge,
+            downsamplingBinPredictionSize, partitionNumber,
+            outputDirName, sc, sqlContext).cache()
 
-        println("\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
+          val dfRealFeatureEdgeScoreDSGroundTruth = EdgeDetection.buildDfGroundTruthStoreOnOffTimes(dfRealFeatureEdgeScoreDS,
+            dfTaggingInfoCurrent, applianceID, downsamplingBinPredictionSec, outputDirName).cache()
 
-        bw.write("\n\nAnalyzing appliance: " + applianceID.toString + " " + applianceName)
+          val resultsApplianceOverThresholds =
+            if (zeroAndGroundTruthThresholdLabel == 1) {
+              // CODE WITH ONLY 0 and BEST THRESHOLDS (i.e. 2 thresholds)
+              println("Threshold O and Groud Truth")
+              EdgeDetection.buildPredictionEvaluateHLRealFeature0andBestThresholds(dfRealFeatureEdgeScoreDSGroundTruth,
+                applianceID, applianceName, outputDirName, scoresONcolName,
+                scoresOFFcolName, downsamplingBinPredictionSec, bw) }
+            else {
+              // CODE WITH ARRAY OF THRESHOLDS
+              println("Threshold ARRAY")
+              val thresholdToTestSorted: Array[(Double, Double)] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
+                scoresONcolName, scoresOFFcolName, nrThresholdsPerAppliance)
 
-        val dfRealFeatureEdgeScoreDS = EdgeDetection.buildStoreDfSimilarityScoreRealFeature(dfFeature,
-          dfEdgeSignatures, applianceID, selectedFeature,
-          timestepsNumberPreEdge, timestepsNumberPostEdge,
-          downsamplingBinPredictionSize, partitionNumber,
-          outputDirName, sc, sqlContext)
+              EdgeDetection.buildPredictionEvaluateHLRealFeature(dfRealFeatureEdgeScoreDSGroundTruth, thresholdToTestSorted,
+                applianceID, applianceName, outputDirName, scoresONcolName,
+                scoresOFFcolName, downsamplingBinPredictionSec, bw)
+            }
 
-        val dfRealFeatureEdgeScoreDSGroundTruth = EdgeDetection.buildStoreDfGroundTruth(dfRealFeatureEdgeScoreDS,
-          dfTaggingInfoCurrent, applianceID, downsamplingBinPredictionSec, outputDirName).cache()
+          dfRealFeatureEdgeScoreDS.unpersist()
+          dfRealFeatureEdgeScoreDSGroundTruth.unpersist()
 
+          // Array(applianceID, applianceName, ((thresholdON, thresholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
+          resultsApplianceOverThresholds
+        }
+        //save resultsOverAppliancesTrain
+        //    val temp: List[(Int, String, Array[(Double, Double)])] = resultsOverAppliances.toList
+        val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "/resultsOverAppliances.dat"))
+        store.writeObject(resultsOverAppliancesInner)
+        store.close()
 
-        // CODE WITH ARRAY OF THRESHOLDS
-/*        println("Selecting threshold to test")
-        val thresholdToTestSortedTrain: Array[(Double, Double)] = SimilarityScore.extractingUniformlySpacedThreshold(dfRealFeatureEdgeScoreDS,
-          scoresONcolName, scoresOFFcolName, nrThresholdsPerAppliance)
-
-          scoresOFFcolName, downsamplingBinPredictionSec, bw)
-*/
-        // CODE WITH ONLY 0 and BEST THRESHOLDS (i.e. 2 thresholds)
-        val resultsApplianceOverThresholds = EdgeDetection.buildPredictionEvaluateHLRealFeature0andBestThresholds(dfRealFeatureEdgeScoreDSGroundTruth,
-          applianceID, applianceName, outputDirName, scoresONcolName,
-          scoresOFFcolName, downsamplingBinPredictionSec, bw)
-
-
-        dfRealFeatureEdgeScoreDS.unpersist()
-        dfRealFeatureEdgeScoreDSGroundTruth.unpersist()
-
-        // Array(applianceID, applianceName, ((thresholdON, thresholdOFF),(hammingLoss, sensitivity, precision)), hammingLoss0Model)
-        resultsApplianceOverThresholds
-
+        resultsOverAppliancesInner
       }
-    //save resultsOverAppliancesTrain
-//    val temp: List[(Int, String, Array[(Double, Double)])] = resultsOverAppliances.toList
-    val store = new ObjectOutputStream(new FileOutputStream(outputDirName + "/resultsOverAppliances.dat"))
-    store.writeObject(resultsOverAppliances)
-    store.close()
+      else {
+        val reader = new ObjectInputStream(new FileInputStream(outputDirName + "/resultsOverAppliances.dat"))
+        val resultsOverAppliancesInner = reader.readObject().asInstanceOf[Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)]]
+        reader.close()
+
+        resultsOverAppliancesInner
+      }
 
 
     //(applianceID, applianceName, thresholdON, thesholdOFF, sensitivity, precision, hammingLoss, hammingLoss0Model, hammingLoss/hammingLoss0Model)
     val bestResultOverAppliances =
-      HammingLoss.extractingHLoverThresholdAndAppliances(resultsOverAppliances)
+      HammingLoss.extractingPerfOverThresholdAndAppliances(resultsOverAppliances)
+
 
     bestResultOverAppliances
-
   }
 
 

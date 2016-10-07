@@ -9,6 +9,6 @@ val resultsOverAppliances = reader.readObject().asInstanceOf[Array[(Int, String,
 reader.close()
 
 
-val bestResultOverAppliances = extractingHLoverThresholdAndAppliances(resultsOverAppliances)
+val bestResultOverAppliances = extractingPerfOverThresholdAndAppliances(resultsOverAppliances)
 
 bestResultOverAppliances.foreach(tuple => println(tuple))

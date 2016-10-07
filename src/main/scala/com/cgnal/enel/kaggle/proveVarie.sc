@@ -46,7 +46,9 @@ val HL = 5.1334242
 println(f"current hamming loss: $HL%2.2f")
 
 
+val pippooo = Array(1,2,5,3,4,-3,-2,0,10,-15)
 
+val frutta = pippooo.+:(3)
 
 
 
