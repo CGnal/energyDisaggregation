@@ -82,13 +82,13 @@ object Main {
     // -----------------------------------------------------------------------------------------------------------------
 
     val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
-    val readingFromFileLabelDfPreProcessed = 0
+    val readingFromFileLabelDfPreProcessed = 1
     // instead of building it from csv
-    val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
+    val readingFromFileLabelDfEdgeSignature = 1  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
     // from filesystem (if previously computed) instead of computing it
 
-    val scoresONcolName = "recipMsdON_TimePrediction_" + selectedFeature
-    val scoresOFFcolName = "recipNegMsdOFF_TimePrediction_" + selectedFeature
+    val scoresONcolName = "recipMsdON_TimePrediction_" + selectedFeaturePreProcessed
+    val scoresOFFcolName = "recipNegMsdOFF_TimePrediction_" + selectedFeaturePreProcessed
 
 
     val extraLabelOutputDirName = "RecipMSD"
