@@ -66,7 +66,7 @@ object Main {
     // -----------------------------------------------------------------------------------------------------------------
     // MOST IMPORTANT PARAMETERS
     // -----------------------------------------------------------------------------------------------------------------
-    val averageSmoothingWindowSize = 6 // number of timestamps, unit: [167ms]
+    val averageSmoothingWindowSize = 1 // number of timestamps, unit: [167ms]
     val downsamplingBinSize = 1 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
 
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
@@ -82,9 +82,9 @@ object Main {
     // -----------------------------------------------------------------------------------------------------------------
 
     val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
-    val readingFromFileLabelDfPreProcessed = 1
+    val readingFromFileLabelDfPreProcessed = 0
     // instead of building it from csv
-    val readingFromFileLabelDfEdgeSignature = 1  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
+    val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
     // from filesystem (if previously computed) instead of computing it
 
     val scoresONcolName = "recipMsdON_TimePrediction_" + selectedFeaturePreProcessed
@@ -158,7 +158,7 @@ object Main {
         // Training set
         // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
         val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house,
-          dirNameFeatureTrain, sc, sqlContext, readingFromFileLabelDfIngestion)
+          sc, sqlContext, readingFromFileLabelDfIngestion)
         // -----------------------------------------------------------------------------------------------------------------
 
         // 2 RESAMPLING ----------------------------------------------------------------------------------------------------
