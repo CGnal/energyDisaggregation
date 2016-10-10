@@ -66,8 +66,8 @@ object Main {
     // -----------------------------------------------------------------------------------------------------------------
     // MOST IMPORTANT PARAMETERS
     // -----------------------------------------------------------------------------------------------------------------
-    val averageSmoothingWindowSize = 1 // number of timestamps, unit: [167ms]
-    val downsamplingBinSize = 1 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
+    val averageSmoothingWindowSize = 6 // number of timestamps, unit: [167ms]
+    val downsamplingBinSize = 6 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
 
     val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     // it is the width considered BEFORE each ON/OFF event to compute signature
@@ -81,7 +81,7 @@ object Main {
     // -----------------------------------------------------------------------------------------------------------------
     // -----------------------------------------------------------------------------------------------------------------
 
-    val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
+    val readingFromFileLabelDfIngestion = 0  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     val readingFromFileLabelDfPreProcessed = 0
     // instead of building it from csv
     val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)

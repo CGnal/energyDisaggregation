@@ -196,10 +196,16 @@ object HammingLoss {
   def extractingPerfOverThresholdAndAppliances(resultsOverAppliances: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)])
   = {
 
+    // rejecting the case where the performance is equal to the one obtained with the 0 Model
     val resultsOverAppliancesNot0Model: Array[(Int, String, Array[((Double, Double), (Double, Double, Double))], Double)] = resultsOverAppliances.map(tuple =>
       (tuple._1, tuple._2, tuple._3.filter(tuple2 => tuple2._2._1 != tuple._4), tuple._4))
 
-    val bestResultOverAppliances = resultsOverAppliancesNot0Model.map(tuple => {
+    // rejecting the case where the sensitivity is zero
+    val resultsOverAppliancesNot0Sensitivity = resultsOverAppliancesNot0Model.map(tuple =>
+      (tuple._1, tuple._2, tuple._3.filter(tuple2 => tuple2._2._2 != 0d), tuple._4))
+
+
+    val bestResultOverAppliances = resultsOverAppliancesNot0Sensitivity.map(tuple => {
 
       val bestThresholdHL: ((Double, Double), (Double, Double, Double)) = tuple._3.minBy(_._2._1)
       val bestThresholdON = bestThresholdHL._1._1
