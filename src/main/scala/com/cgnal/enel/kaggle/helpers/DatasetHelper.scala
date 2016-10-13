@@ -3,7 +3,7 @@ package com.cgnal.enel.kaggle.helpers
 import java.io.StringReader
 
 import au.com.bytecode.opencsv.CSVReader
-import com.cgnal.enel.kaggle.utils.ComplexMap
+import com.cgnal.enel.kaggle.utils.{myUDF, ComplexMap}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
@@ -228,16 +228,28 @@ object DatasetHelper {
   def addPowerToDfFeatures(dfFeatures: DataFrame) = {
     // Adding Power = V * conj(I)
     val dfFeaturesPowerTemp = dfFeatures.withColumn("PowerFund", ComplexMap.complexProdUDF(dfFeatures("Vfund"), ComplexMap.complexConjUDF(dfFeatures("Ifund"))))
-//      .withColumn("Power1H", ComplexMap.complexProdUDF(dfFeatures("V1H"), ComplexMap.complexConjUDF(dfFeatures("I1H"))))
-//      .withColumn("Power2H", ComplexMap.complexProdUDF(dfFeatures("V2H"), ComplexMap.complexConjUDF(dfFeatures("I2H"))))
-//      .withColumn("Power3H", ComplexMap.complexProdUDF(dfFeatures("V3H"), ComplexMap.complexConjUDF(dfFeatures("I3H"))))
-//      .withColumn("Power4H", ComplexMap.complexProdUDF(dfFeatures("V4H"), ComplexMap.complexConjUDF(dfFeatures("I4H"))))
-//      .withColumn("Power5H", ComplexMap.complexProdUDF(dfFeatures("V5H"), ComplexMap.complexConjUDF(dfFeatures("I5H"))))
+      .withColumn("Power1H", ComplexMap.complexProdUDF(dfFeatures("V1H"), ComplexMap.complexConjUDF(dfFeatures("I1H"))))
+      .withColumn("Power2H", ComplexMap.complexProdUDF(dfFeatures("V2H"), ComplexMap.complexConjUDF(dfFeatures("I2H"))))
+      .withColumn("Power3H", ComplexMap.complexProdUDF(dfFeatures("V3H"), ComplexMap.complexConjUDF(dfFeatures("I3H"))))
+      .withColumn("Power4H", ComplexMap.complexProdUDF(dfFeatures("V4H"), ComplexMap.complexConjUDF(dfFeatures("I4H"))))
+      .withColumn("Power5H", ComplexMap.complexProdUDF(dfFeatures("V5H"), ComplexMap.complexConjUDF(dfFeatures("I5H"))))
 
     val dfFeaturesPower = dfFeaturesPowerTemp.withColumn("RealPowerFund", ComplexMap.realPartUDF(dfFeaturesPowerTemp("PowerFund")))
-      .withColumn("ApparentPowerFund", ComplexMap.complexAbsUDF(dfFeaturesPowerTemp("PowerFund")))
+      .withColumn("AppPowerFund", ComplexMap.complexAbsUDF(dfFeaturesPowerTemp("PowerFund")))
 
-    dfFeaturesPower
+    val dfFeaturesNetPower = dfFeaturesPower.withColumn("netComplexPower", myUDF.netComplexPowerUDF(dfFeaturesPower("PowerFund"),
+      dfFeaturesPower("Power1H"),dfFeaturesPower("Power2H"), dfFeaturesPower("Power3H"),
+      dfFeaturesPower("Power4H"), dfFeaturesPower("Power5H")))
+
+    val dfFeaturesNetPowerFeatures = dfFeaturesNetPower.withColumn("RealPower", ComplexMap.realPartUDF(dfFeaturesNetPower("netComplexPower")))
+      .withColumn("ReacPower", ComplexMap.imPartUDF(dfFeaturesNetPower("netComplexPower")))
+      .withColumn("AppPower", ComplexMap.complexAbsUDF(dfFeaturesNetPower("netComplexPower")))
+
+    val dfFeaturesFinal = dfFeaturesNetPowerFeatures.withColumn("PowerFactorFund",
+      dfFeaturesNetPowerFeatures("RealPowerFund")/dfFeaturesNetPowerFeatures("AppPowerFund"))
+
+    dfFeaturesFinal
+
   }
 
 

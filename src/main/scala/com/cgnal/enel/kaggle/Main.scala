@@ -172,7 +172,13 @@ object Main {
         val dfFeatureEdgeDetectionTrain = dfFeatureResampledDiffTrain.cache()
 
         // Serialization of the dfFeature actually used
-        CSVutils.storingSparkCsv(dfFeatureEdgeDetectionTrain, dirNameFeatureTrain + "/dfFeaturePreProcessed.csv")
+        val columnNames = Seq("IDtime", "Timestamp", selectedFeature + "Original", selectedFeature,
+          selectedFeature + "_FirstDiff")
+
+        // using the string column names:
+        val dfFeaturePreprocessedToStore = dfFeatureEdgeDetectionTrain.select(columnNames.head, columnNames.tail: _*)
+
+        CSVutils.storingSparkCsv(dfFeaturePreprocessedToStore, dirNameFeatureTrain + "/dfFeaturePreProcessed.csv")
         dfFeatureEdgeDetectionTrain
       }
 
