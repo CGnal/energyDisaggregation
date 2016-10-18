@@ -81,7 +81,7 @@ object Main {
     // -----------------------------------------------------------------------------------------------------------------
     // -----------------------------------------------------------------------------------------------------------------
 
-    val readingFromFileLabelDfIngestion = 0  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
+    val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
     val readingFromFileLabelDfPreProcessed = 0
     // instead of building it from csv
     val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)

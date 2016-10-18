@@ -88,6 +88,7 @@ object CrossValidation {
           dayFolderArrayWithRowNumber.map(tuple => {
 
             val dayFolder = tuple._1
+            // LOADING ONLY PHASE 1
             val filenameCSV_V = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
             val filenameCSV_I = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
             val filenameTimestamp = dirNameDataset + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
