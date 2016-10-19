@@ -1,11 +1,12 @@
 import sbt.Keys._
 
-val sparkVersion = "1.6.0"//-cdh5.7.0"
+val sparkVersion = "1.6.0-cdh5.7.0"
 val scalaVersionNumber: String = "2.10.6"
+val scalaTestVersion = "3.0.0"
+val typesafeConfigVersion = "1.3.1"
 
 fork in test := true
 parallelExecution in Test := false
-
 
 /**
   * working job
@@ -40,15 +41,16 @@ def commonDependecies(moduleName: String) = {
     javaOptions += "-Xms512m -Xmx2G",
     resolvers ++= Seq(
       Resolver.mavenLocal,
-//      "Cloudera CDH" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
-//      "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-      "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
-      "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
+      "Cloudera CDH" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
+      "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+      //      "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
+      //      "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
     ),
-//    libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.5" % "test"
+    //    libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.5" % "test"
     libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % "2.2.5" % "test"
-      )
+      "org.scalatest" %% "scalatest" % scalaTestVersion,
+      "com.typesafe" % "config" % typesafeConfigVersion
+    )
   )
 }
 

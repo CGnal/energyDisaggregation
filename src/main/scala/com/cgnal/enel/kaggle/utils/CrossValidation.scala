@@ -19,14 +19,16 @@ object CrossValidation {
 
 
 
-  def creatingDfFeatureFixedHouseAndDay(dayFolder: String, house: String, outputDirName: String,
+  def creatingDfFeatureFixedHouseAndDay(dayFolder: String, house: String,
+                                        datasetDirPath: String,
+                                        outputDirName: String,
                                         sc: SparkContext, sqlContext: SQLContext,
                                         readingFromFileLabel: Int = 0) = {
 
 
-    val filenameCSV_V = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
-    val filenameCSV_I = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
-    val filenameTimestamp = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
+    val filenameCSV_V = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+    val filenameCSV_I = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
+    val filenameTimestamp = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
 
 
     val filenameDfFeaturesSingleDay = outputDirName + "/dfFeature.csv"
@@ -65,10 +67,12 @@ object CrossValidation {
 
 
     def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String,
+                                            datasetDirPath: String,
                                             sc: SparkContext, sqlContext: SQLContext,
                                             readingFromFileLabel: Int = 0) = {
 
-      val dirNameDataset = ReferencePath.datasetDirPath + house
+
+      val dirNameDataset = datasetDirPath + house
 
       val filenameDfFeaturesOverDays = dirNameDataset + "/dfFeature.csv"
 
@@ -143,11 +147,11 @@ object CrossValidation {
 
 
 
-  def creatingDfTaggingInfoFixedHouseAndDay(dayFolder: String, house: String,
+  def creatingDfTaggingInfoFixedHouseAndDay(dayFolder: String, house: String, datasetDirPath: String,
                                             sc: SparkContext, sqlContext: SQLContext): DataFrame = {
 
 
-    val filenameTaggingInfo = ReferencePath.datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TaggingInfo.csv"
+    val filenameTaggingInfo = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TaggingInfo.csv"
 
 
     val arrayTaggingInfo: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameTaggingInfo)
@@ -160,10 +164,10 @@ object CrossValidation {
 
 
 
-  def creatingDfTaggingInfoFixedHouseOverDays(dayFolderArray: Array[String], house: String,
+  def creatingDfTaggingInfoFixedHouseOverDays(dayFolderArray: Array[String], house: String, datasetDirPath: String,
                                               sc: SparkContext, sqlContext: SQLContext): DataFrame = {
 
-    val dirNameDataset = ReferencePath.datasetDirPath + house
+    val dirNameDataset = datasetDirPath + house
 
     val rowNumberPerDay =
       dayFolderArray.map(dayFolder => {

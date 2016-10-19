@@ -22,7 +22,7 @@ class ComplexMap$Test extends FunSuite with BeforeAndAfterAll{
       StructType(StructField("ID1", MapType(StringType, DoubleType), false) ::
         StructField("ID2", MapType(StringType, DoubleType), false) :: Nil)
     df = DatasetHelper.fromCSVwithComplexToDF(sc, sqlContext,
-      filenameCompleMathTest, complexMathTestSchema)
+      filenameComplexMathTest, complexMathTestSchema)
     df.printSchema()
   }
 
@@ -65,8 +65,8 @@ class ComplexMap$Test extends FunSuite with BeforeAndAfterAll{
 
   test("testAbs") {
     val df2 = df.withColumn("Abs", ComplexMap.complexAbsUDF(df.col("ID1")))
-    assert(df2.select("Abs").take(1)(0).getDouble(0) === 13)
-    assert(df2.select("Abs").take(2)(1).getDouble(0) === 34)
+    assert(df2.select("Abs").take(1)(0).getDouble(0) === Math.sqrt(13d))
+    assert(df2.select("Abs").take(2)(1).getDouble(0) === Math.sqrt(34d))
 
   }
 
@@ -98,7 +98,7 @@ object ComplexMap$Test {
   var conf :SparkConf = _
   var sc :SparkContext = _
   var sqlContext: SQLContext  = _
-  val filenameCompleMathTest = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testVMath.csv"
+  val filenameComplexMathTest = "/Users/cavaste/ProjectsResultsData/EnergyDisaggregation/dataset/ExampleForCodeTest/testVMath.csv"
   var complexMathTestSchema: StructType = _
   var df:DataFrame = _
 }

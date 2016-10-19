@@ -16,13 +16,15 @@ import org.apache.spark.sql.expressions.{Window, WindowSpec}
 import org.apache.spark.sql.types.{DoubleType, LongType, StructField, StructType}
 import org.apache.spark.sql.{GroupedData, DataFrame, SQLContext, Row}
 import com.databricks.spark.avro._
-import org.apache.spark.sql.hive.HiveContext
 import org.joda.time.DateTime
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
 import scala.reflect.io.Path
 import scala.util.{Failure, Success, Try}
+import scala.collection.JavaConverters._
+
+import com.typesafe.config.{Config, ConfigFactory}
 
 /**
   * Created by cavaste on 08/08/16.
@@ -31,67 +33,68 @@ import scala.util.{Failure, Success, Try}
 
 object Main {
 
+//  val configuration: Config = ConfigFactory.load()
 
   def main(args: Array[String]) = {
 
+    val configuration =
+    if (args.length > 0)
+      ConfigFactory.parseFile(new File(args(0)))
+    else
+      ConfigFactory.load()
+
     // Initialization of the spark context
-    val conf = new SparkConf().setMaster("local[4]").setAppName("energyDisaggregation")
-    val sc = new SparkContext(conf)
-    //    val sqlContext = new SQLContext(sc)
-    val rootLogger = Logger.getRootLogger()
-    rootLogger.setLevel(Level.ERROR)
-    val sqlContext = new HiveContext(sc)
+    val sparkMaster = configuration.getString("configuration.sparkMaster")
+    val appName = configuration.getString("configuration.appName")
+
+    val (sc, sqlContext) = ExperimentConfigFactory.sparkContextInitializer(sparkMaster, appName)
 
     // PARAMETERS ------------------------------------------------------------------------------------------------------
     // DATASET TRAINING AND TEST SET
     // The code is built to process data from a single home by splitting on training and test set based on the day
-/*    val dayFolderArrayTraining = Array("10_22_1350889201", "10_23_1350975601") //folders corresponding to the days used as
-    // training set (it can be an array with more days)
-    val dayFolderTest = "10_25_1351148401" // folder corresponding to the day used as test set (it must contain one day)
-    val house = "H1"
-*/
-    val dayFolderArrayTraining = Array("07_27_1343372401")
-    val dayFolderTest = "07_26_1343286001"
-    val house = "H4"
+    val dayFolderArrayTraining = configuration.getStringList("configuration.dayFolderArrayTraining").asScala.toArray
+
+
+    val dayFolderTest = configuration.getString("configuration.dayFolderTest")
+    val house = configuration.getString("configuration.house")
 
     // -----------------------------------------------------------------------------------------------------------------
-    val partitionNumber = 4 // set equal to the number of local nodes
+    val partitionNumber = configuration.getInt("configuration.partitionNumber") // set equal to the number of local nodes
 
     // MODEL PARAMETERS
-    val selectedFeature = "RealPowerFund" // Feature used to compute edgeSignature and similarity (it must be one of the features
-    val selectedFeaturePreProcessed = "RealPowerFund_FirstDiff"
+    val selectedFeature = configuration.getString("configuration.selectedFeature") // Feature used to compute edgeSignature and similarity (it must be one of the features
+    val selectedFeaturePreProcessed = configuration.getString("configuration.selectedFeaturePreProcessed")
     // founded in dfFeature)
     type SelFeatureType = Double
 
     // -----------------------------------------------------------------------------------------------------------------
     // MOST IMPORTANT PARAMETERS
     // -----------------------------------------------------------------------------------------------------------------
-    val averageSmoothingWindowSize = 6 // number of timestamps, unit: [167ms]
-    val downsamplingBinSize = 6 // take one point every downsamplingBinSiz timestamps, unit: [167ms]
+    val averageSmoothingWindowSize = configuration.getInt("configuration.averageSmoothingWindowSize") // number of timestamps, unit: [167ms]
+    val downsamplingBinSize = configuration.getInt("configuration.downsamplingBinSize") // take one point every downsamplingBinSiz timestamps, unit: [167ms]
 
-    val timestampIntervalPreEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
+    val timestampIntervalPreEdge = configuration.getLong("configuration.timestampIntervalPreEdge") // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     // it is the width considered BEFORE each ON/OFF event to compute signature
-    val timestampIntervalPostEdge = 5L // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
+    val timestampIntervalPostEdge = configuration.getLong("configuration.timestampIntervalPostEdge") // time interval amplitude in sec. Note that the sampling bin is [downsamplingBinSize*167ms]
     // it is the width considered AFTER each ON/OFF event to compute signature
 
-    val downsamplingBinPredictionSec = 60 // take one point every downsamplingBinPredictionSec sec
+    val downsamplingBinPredictionSec = configuration.getInt("configuration.downsamplingBinPredictionSec") // take one point every downsamplingBinPredictionSec sec
 
-    val zeroAndGroundTruthThresholdLabel = 0 // if this is 1 the "nrThresholdsPerAppliance" parameter is not used
-    val nrThresholdsPerAppliance = 19 // note that the actual nr of thresholds will be (nrThresholdsPerAppliance + 1)
+    val zeroAndGroundTruthThresholdLabel = configuration.getInt("configuration.zeroAndGroundTruthThresholdLabel") // if this is 1 the "nrThresholdsPerAppliance" parameter is not used
+    val nrThresholdsPerAppliance = configuration.getInt("configuration.nrThresholdsPerAppliance")  // note that the actual nr of thresholds will be (nrThresholdsPerAppliance + 1)
     // -----------------------------------------------------------------------------------------------------------------
     // -----------------------------------------------------------------------------------------------------------------
 
-    val readingFromFileLabelDfIngestion = 1  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
-    val readingFromFileLabelDfPreProcessed = 0
+    val readingFromFileLabelDfIngestion = configuration.getInt("configuration.readingFromFileLabelDfIngestion")  // flag to read dfFeature (dataframe with the features) from filesystem (if previously computed)
+    val readingFromFileLabelDfPreProcessed = configuration.getInt("configuration.readingFromFileLabelDfPreProcessed")
     // instead of building it from csv
-    val readingFromFileLabelDfEdgeSignature = 0  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
+    val readingFromFileLabelDfEdgeSignature = configuration.getInt("configuration.readingFromFileLabelDfEdgeSignature")  // flag to read dfEdgeSignature (dataframe with the ON/OFF signatures)
     // from filesystem (if previously computed) instead of computing it
 
-    val scoresONcolName = "recipMsdON_TimePrediction_" + selectedFeaturePreProcessed
-    val scoresOFFcolName = "recipNegMsdOFF_TimePrediction_" + selectedFeaturePreProcessed
+    val scoresONcolName = configuration.getString("configuration.scoresONcolName")
+    val scoresOFFcolName = configuration.getString("configuration.scoresOFFcolName")
 
-
-    val extraLabelOutputDirName = "RecipMSD"
+    val extraLabelOutputDirName = configuration.getString("configuration.extraLabelOutputDirName")
 
     //------------------------------------------------------------------------------------------------------------------
     val timestepsNumberPreEdge= (timestampIntervalPreEdge.toInt/(downsamplingBinSize * 0.167)).round.toInt // number of points in the interval
@@ -103,36 +106,38 @@ object Main {
     if (nrThresholdsPerAppliance <= 1) sys.error("When using evenly spaced thresholds nrThresholdsPerAppliance must be >= 2 ")
 
     // OUTPUT DIR NAME -------------------------------------------------------------------------------------------------
-    val dirNameFeatureTrain = ReferencePath.datasetDirPath + house + "/dfFeatureTrain" + dayFolderArrayTraining(0) +
+    val datasetDirPath = configuration.getString("datasetDirPath")
+    
+    val dirNameFeatureTrain = datasetDirPath + house + "/dfFeatureTrain" + dayFolderArrayTraining(0) +
       "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
-    val dirNameFeatureTest = ReferencePath.datasetDirPath + house + "/dfFeatureTest" + dayFolderTest +
+    val dirNameFeatureTest = datasetDirPath + house + "/dfFeatureTest" + dayFolderTest +
       "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
     val dirNameResultsTrain =
       if (zeroAndGroundTruthThresholdLabel == 1) {
-        ReferencePath.datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
+        datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
           "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
           "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
           "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_0andGTthr"
       }
       else {
-        ReferencePath.datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
+        datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
           "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
           "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
           "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
       }
 
     val dirNameResultsTest =
-      if (zeroAndGroundTruthThresholdLabel == 1) {ReferencePath.datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+      if (zeroAndGroundTruthThresholdLabel == 1) {datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
         "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
         "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_0andGTthr"
       }
-      else{ReferencePath.datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+      else{datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
         "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
         "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
       }
@@ -157,7 +162,7 @@ object Main {
         // TODO inserire ciclo su HOUSE
         // Training set
         // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
-        val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house,
+        val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house, datasetDirPath,
           sc, sqlContext, readingFromFileLabelDfIngestion)
         // -----------------------------------------------------------------------------------------------------------------
 
@@ -192,7 +197,7 @@ object Main {
 
     // TAGGING INFO TRAIN
     // Create the dataframe with the Tagging Info from csv
-    val dfTaggingInfoTrainTemp = CrossValidation.creatingDfTaggingInfoFixedHouseOverDays(dayFolderArrayTraining, house,
+    val dfTaggingInfoTrainTemp = CrossValidation.creatingDfTaggingInfoFixedHouseOverDays(dayFolderArrayTraining, house, datasetDirPath,
       sc, sqlContext)
     val dfTaggingInfoTrainTemp2 = dfTaggingInfoTrainTemp.filter(dfTaggingInfoTrainTemp("ApplianceID") <= 38)
     val dfTaggingInfoTrain = dfTaggingInfoTrainTemp2.filter(dfTaggingInfoTrainTemp2("ON_Time") !== dfTaggingInfoTrainTemp2("OFF_Time"))
@@ -200,7 +205,7 @@ object Main {
 
 
     // TAGGING INFO TEST
-    val dfTaggingInfoTestTemp = CrossValidation.creatingDfTaggingInfoFixedHouseAndDay(dayFolderTest, house,
+    val dfTaggingInfoTestTemp = CrossValidation.creatingDfTaggingInfoFixedHouseAndDay(dayFolderTest, house, datasetDirPath,
       sc, sqlContext)
     val dfTaggingInfoTestTemp2 = dfTaggingInfoTestTemp.filter(dfTaggingInfoTestTemp("ApplianceID") <= 38)
     val dfTaggingInfoTest = dfTaggingInfoTestTemp2.filter(dfTaggingInfoTestTemp2("ON_Time") !== dfTaggingInfoTestTemp2("OFF_Time"))
@@ -320,7 +325,8 @@ object Main {
     if (appliancesTest.length != 0) {
       // from now on the code performs the same operations already done
       // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
-      val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house, dirNameFeatureTest,
+      val dfFeatureTest = CrossValidation.creatingDfFeatureFixedHouseAndDay(dayFolderTest, house, datasetDirPath,
+        dirNameFeatureTest,
         sc, sqlContext, readingFromFileLabelDfIngestion)
       println("Time for INGESTION: " + (DateTime.now().getMillis - dateTime.getMillis) + "ms")
 
