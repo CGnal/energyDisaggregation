@@ -107,43 +107,45 @@ object Main {
 
     // OUTPUT DIR NAME -------------------------------------------------------------------------------------------------
     val datasetDirPath = configuration.getString("datasetDirPath")
+    val outputDirPathHDFS = configuration.getString("outputDirPath")
     
-    val dirNameFeatureTrain = datasetDirPath + house + "/dfFeatureTrain" + dayFolderArrayTraining(0) +
+    val dirNameFeatureTrain = outputDirPathHDFS + house + "/dfFeatureTrain" + dayFolderArrayTraining(0) +
       "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
-    val dirNameFeatureTest = datasetDirPath + house + "/dfFeatureTest" + dayFolderTest +
+    val dirNameFeatureTest = outputDirPathHDFS + house + "/dfFeatureTest" + dayFolderTest +
       "_avg" + averageSmoothingWindowSize.toString +
       "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
       "_postInt" + timestampIntervalPostEdge.toString
 
     val dirNameResultsTrain =
       if (zeroAndGroundTruthThresholdLabel == 1) {
-        datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
+        outputDirPathHDFS + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
           "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
           "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
           "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_0andGTthr"
       }
       else {
-        datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
+        outputDirPathHDFS + house + "/Results" + selectedFeaturePreProcessed + "/Train" + extraLabelOutputDirName + "_" + dayFolderArrayTraining(0) +
           "_" + dayFolderArrayTraining.last + "_avg" + averageSmoothingWindowSize.toString +
           "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
           "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
       }
 
     val dirNameResultsTest =
-      if (zeroAndGroundTruthThresholdLabel == 1) {datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+      if (zeroAndGroundTruthThresholdLabel == 1) {outputDirPathHDFS + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
         "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
         "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_0andGTthr"
       }
-      else{datasetDirPath + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
+      else{outputDirPathHDFS + house + "/Results" + selectedFeaturePreProcessed + "/Test" + extraLabelOutputDirName + "_" + dayFolderTest + "_avg" + averageSmoothingWindowSize.toString +
         "_dw" + downsamplingBinSize.toString + "_preInt" + timestampIntervalPreEdge.toString +
         "_postInt" + timestampIntervalPostEdge.toString + "_dwPrediction" + downsamplingBinPredictionSec.toString + "_nrThr" + (nrThresholdsPerAppliance+1).toString
       }
 
-    val outputTextFilenameTraining = dirNameResultsTrain + "/outputFileTraining.txt"
-    val outputTextFilenameTest = dirNameResultsTest + "/outputFileTest.txt"
+    // TODO adjust the output file name
+    val outputTextFilenameTraining = datasetDirPath + house + "/outputFileTrainingProva.txt"
+    val outputTextFilenameTest = datasetDirPath + house + "/outputFileTestProva.txt"
     //------------------------------------------------------------------------------------------------------------------
 
     // SAVING PRINTED OUTPUT TO A FILE
@@ -163,6 +165,7 @@ object Main {
         // Training set
         // create the dataframe with the features from csv (or read it from filesystem depending on the flag readingFromFileLabelDfIngestion)
         val dfFeatureTrain = CrossValidation.creatingDfFeatureFixedHouseOverDays(dayFolderArrayTraining, house, datasetDirPath,
+          outputDirPathHDFS,
           sc, sqlContext, readingFromFileLabelDfIngestion)
         // -----------------------------------------------------------------------------------------------------------------
 
@@ -205,12 +208,12 @@ object Main {
 
 
     // TAGGING INFO TEST
-    val dfTaggingInfoTestTemp = CrossValidation.creatingDfTaggingInfoFixedHouseAndDay(dayFolderTest, house, datasetDirPath,
+/*    val dfTaggingInfoTestTemp = CrossValidation.creatingDfTaggingInfoFixedHouseAndDay(dayFolderTest, house, datasetDirPath,
       sc, sqlContext)
     val dfTaggingInfoTestTemp2 = dfTaggingInfoTestTemp.filter(dfTaggingInfoTestTemp("ApplianceID") <= 38)
     val dfTaggingInfoTest = dfTaggingInfoTestTemp2.filter(dfTaggingInfoTestTemp2("ON_Time") !== dfTaggingInfoTestTemp2("OFF_Time"))
       .cache()
-
+*/
     //------------------------------------------------------------------------------------------------------------------
 
     // NUMEROSITY
@@ -222,13 +225,13 @@ object Main {
     nrEdgesPerApplianceTrain.foreach({ case (x, y) => println("ApplianceID: " + x.toString + " number of ON/OFF events in the training set: " + y.toString) })
 
     // CHECK of the number of appliances and edges founded in the TEST SET
-    val nrEdgesPerApplianceTest: Map[Int, Int] = dfTaggingInfoTest.filter(dfTaggingInfoTest("ApplianceID").isin(appliancesTrain: _*))
+/*    val nrEdgesPerApplianceTest: Map[Int, Int] = dfTaggingInfoTest.filter(dfTaggingInfoTest("ApplianceID").isin(appliancesTrain: _*))
       .select("ApplianceID").map(row => row.getAs[Int](0)).collect()
       .groupBy(identity).map({ case (x, y) => (x, y.size) })
     val appliancesTest = nrEdgesPerApplianceTest.keySet.toArray.sorted
     println("\n\nNumber of appliances in the test (and in the training) set: " + appliancesTest.length.toString)
     nrEdgesPerApplianceTest.foreach({ case (x, y) => println("ApplianceID: " + x.toString + " number of ON/OFF events in the test set: " + y.toString) })
-
+*/
     // -----------------------------------------------------------------------------------------------------------------
 
 
@@ -318,7 +321,7 @@ object Main {
 
 
     // TEST SET -------------------------------------------------------------------------------------------------------
-    val theDirTest = new File(dirNameResultsTest)
+/*    val theDirTest = new File(dirNameResultsTest)
     if (!theDirTest.exists()) theDirTest.mkdirs()
 
     val bwTest: BufferedWriter = new BufferedWriter(new FileWriter(outputTextFilenameTest))
@@ -406,6 +409,7 @@ object Main {
 
     //chiusura
     bwTest.close()
+*/
     bwTrain.close()
   }
 

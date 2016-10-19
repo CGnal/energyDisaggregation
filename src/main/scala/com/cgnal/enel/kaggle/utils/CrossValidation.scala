@@ -11,6 +11,7 @@ import org.apache.spark.sql.functions.{row_number}
 
 import scala.reflect.io.Path
 import scala.util.Try
+import sys.process._
 
 /**
   * Created by cavaste on 20/09/16.
@@ -43,7 +44,11 @@ object CrossValidation {
 
       val path: Path = Path(filenameDfFeaturesSingleDay)
       if (path.exists) {
-        Try(path.deleteRecursively())
+        try {
+          path.deleteRecursively()
+        } catch {
+          case e: Exception => {"hdfs dfs -rm -r "+filenameDfFeaturesSingleDay !}
+        }
       }
       dfFeatures.write
         .format("com.databricks.spark.csv")
@@ -68,19 +73,20 @@ object CrossValidation {
 
     def creatingDfFeatureFixedHouseOverDays(dayFolderArray: Array[String], house: String,
                                             datasetDirPath: String,
+                                            outputDirPath: String,
                                             sc: SparkContext, sqlContext: SQLContext,
                                             readingFromFileLabel: Int = 0) = {
 
 
-      val dirNameDataset = datasetDirPath + house
+      val outputDirNameDataset = outputDirPath + house
 
-      val filenameDfFeaturesOverDays = dirNameDataset + "/dfFeature.csv"
+      val filenameDfFeaturesOverDays = outputDirNameDataset + "/dfFeature.csv"
 
       val dfFeaturesOverDays = if (readingFromFileLabel == 0) {
 
         val rowNumberPerDay =
           dayFolderArray.map(dayFolder => {
-            val filenameCSV_V = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+            val filenameCSV_V = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
 
             DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V).length
           })
@@ -93,9 +99,9 @@ object CrossValidation {
 
             val dayFolder = tuple._1
             // LOADING ONLY PHASE 1
-            val filenameCSV_V = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
-            val filenameCSV_I = dirNameDataset + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
-            val filenameTimestamp = dirNameDataset + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
+            val filenameCSV_V = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1V.csv"
+            val filenameCSV_I = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/LF1I.csv"
+            val filenameTimestamp = datasetDirPath + house + "/Tagged_Training_" + dayFolder + "/TimeTicks1.csv"
 
 
             val arrayV: Array[(Array[String], Int)] = DatasetHelper.fromCSVtoArrayAddingRowIndex(filenameCSV_V, tuple._2)
@@ -122,7 +128,11 @@ object CrossValidation {
 
         val path: Path = Path(filenameDfFeaturesOverDays)
         if (path.exists) {
-          Try(path.deleteRecursively())
+          try {
+            path.deleteRecursively()
+          } catch {
+            case e: Exception => {"hdfs dfs -rm -r " + filenameDfFeaturesOverDays !}
+          }
         }
         dfFeaturesOverDaysTemp.write
           .format("com.databricks.spark.csv")

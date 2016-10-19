@@ -15,7 +15,7 @@ object ExperimentConfigFactory {
     val sc = new SparkContext(conf)
     val rootLogger = Logger.getRootLogger()
     rootLogger.setLevel(Level.ERROR)
-    val sqlContext = new org.apache.spark.sql.HiveContext(sc)
+    val sqlContext = new HiveContext(sc)
 
     (sc, sqlContext)
   }

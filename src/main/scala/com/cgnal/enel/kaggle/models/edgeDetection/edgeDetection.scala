@@ -24,6 +24,8 @@ import scala.util.control.Breaks._
 
 import scala.reflect.io.Path
 import scala.util.{Failure, Success, Try}
+import sys.process._
+
 
 /**
   * Created by cavaste on 01/09/16.
@@ -424,7 +426,11 @@ object EdgeDetection {
 
     val path: Path = Path (dfEdgeWindowsFilename)
     if (path.exists) {
-      Try(path.deleteRecursively())
+      try {
+        path.deleteRecursively()
+      } catch {
+        case e: Exception => {"hdfs dfs -rm -r "+dfEdgeWindowsFilename !}
+      }
     }
     dfEdgeWindowsTaggingInfo.write
       .avro(dfEdgeWindowsFilename)
@@ -876,7 +882,11 @@ object EdgeDetection {
     // saving dfEdgeSignature
     val path: Path = Path (dfEdgeSignaturesFileName + ".avro")
     if (path.exists) {
-      Try(path.deleteRecursively())
+      try {
+        path.deleteRecursively()
+      } catch {
+        case e: Exception => {"hdfs dfs -rm -r "+dfEdgeSignaturesFileName + ".avro" !}
+      }
     }
     dfEdgeSignaturesGood.write
       .avro(dfEdgeSignaturesFileName + ".avro")

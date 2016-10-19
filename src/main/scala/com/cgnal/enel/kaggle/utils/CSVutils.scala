@@ -6,6 +6,7 @@ import org.apache.spark.sql.DataFrame
 import scala.io.Source
 import scala.reflect.io.Path
 import scala.util.Try
+import sys.process._
 
 /**
   * Created by cavaste on 21/09/16.
@@ -18,7 +19,11 @@ object CSVutils {
 
     val path: Path = Path (outputFileName)
     if (path.exists) {
-      Try(path.deleteRecursively())
+      try {
+        path.deleteRecursively()
+      } catch {
+        case e: Exception => {"hdfs dfs -rm -r "+outputFileName !}
+      }
     }
     df.write
       .format("com.databricks.spark.csv")
