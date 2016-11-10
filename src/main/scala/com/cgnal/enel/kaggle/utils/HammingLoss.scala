@@ -76,11 +76,11 @@ object HammingLoss {
         dfEdgeScoresGroundTruth, thresholdON, thresholdOFF,
         scoresONcolName, scoresOFFcolName, timeStampColName)
 
-    val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
-      applianceID.toString + "_thresholdON" + (thresholdON*1E7).toInt.toString + ".txt"
-
-    val stringOnOff: String = onOffWindows.mkString("\n")
-    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
+    // SAVING predicted onOffTimeArray
+//    val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
+//      applianceID.toString + "_thresholdON" + (thresholdON*1E7).toInt.toString + ".txt"
+//    val stringOnOff: String = onOffWindows.mkString("\n")
+//    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
 
 
     val dfPredictionsGroundTruth = addOnOffStatusToDF(dfEdgeScoresGroundTruth,onOffWindows,
@@ -143,11 +143,11 @@ object HammingLoss {
         dfEdgeScoresGroundTruth, thresholdON, thresholdOFF,
         scoresONcolName, scoresOFFcolName, timeStampColName)
 
-    val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
-      applianceID.toString + "_thresholdON" + (thresholdON*1E7).toInt.toString + ".txt"
-
-    val stringOnOff: String = onOffWindows.mkString("\n")
-    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
+    // SAVING predicted onOffArray
+//    val outputFilename = onOffOutputDirName+ "/OnOffArray_AppID" +
+//      applianceID.toString + "_thresholdON" + (thresholdON*1E7).toInt.toString + ".txt"
+//    val stringOnOff: String = onOffWindows.mkString("\n")
+//    Files.write(Paths.get(outputFilename), stringOnOff getBytes StandardCharsets.UTF_8)
 
 
     val dfPredictionsGroundTruth = addOnOffStatusToDF(dfEdgeScoresGroundTruth,onOffWindows,

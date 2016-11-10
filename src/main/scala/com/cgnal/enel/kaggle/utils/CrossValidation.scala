@@ -47,7 +47,8 @@ object CrossValidation {
         try {
           path.deleteRecursively()
         } catch {
-          case e: Exception => {"hdfs dfs -rm -r "+filenameDfFeaturesSingleDay !}
+          case e: Exception =>
+          {"hdfs dfs -rm -r "+ filenameDfFeaturesSingleDay !}
         }
       }
       dfFeatures.write

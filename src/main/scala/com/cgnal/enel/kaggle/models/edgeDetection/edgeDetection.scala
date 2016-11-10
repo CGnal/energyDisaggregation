@@ -748,10 +748,10 @@ object EdgeDetection {
       .filter(dfTaggingInfo("applianceID") === applianceID)
       .select("ON_Time", "OFF_Time").map(r => (r.getLong(0), r.getLong(1))).collect()
 
-    val outputFilename = outputDirName + "/OnOffArrayGroundTruth_AppID" + applianceID.toString + ".txt"
-
-    val stringOnOff: String = onOffWindowsGroundTruth.mkString("\n")
-    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
+    // SAVING onOffTimesGroundTruth
+//    val outputFilename = outputDirName + "/OnOffArrayGroundTruth_AppID" + applianceID.toString + ".txt"
+//    val stringOnOff: String = onOffWindowsGroundTruth.mkString("\n")
+//    Files.write(Paths.get(outputFilename), stringOnOff.getBytes(StandardCharsets.UTF_8))
 
 
     val dfRealFeatureEdgeScoreDSGroundTruth: DataFrame = HammingLoss.addOnOffStatusToDF(dfRealFeatureEdgeScoreDS, onOffWindowsGroundTruth,
